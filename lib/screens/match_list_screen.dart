@@ -110,7 +110,11 @@ class _MatchListScreenState extends State<MatchListScreen>
       context,
       _slideUpRoute(
         MatchDetailScreen(
-          match: match,
+          // Always pass the LIVE match from state so we show fresh data
+          match: state.matches.firstWhere(
+            (m) => m.id == match.id,
+            orElse: () => match,
+          ),
           format: state.format,
           isRoundActive: isRoundActive,
           onSaveResult: (hg, ag) {
@@ -131,10 +135,10 @@ class _MatchListScreenState extends State<MatchListScreen>
           },
         ),
       ),
-    ).then((didUpdate) {
-      if (didUpdate == true && mounted) {
-        setState(() {}); // refresh list status badges
-      }
+    ).then((_) {
+      // Always force a rebuild on return so winner badges and scores
+      // instantly reflect the latest state — regardless of save or cancel.
+      if (mounted) setState(() {});
     });
   }
 

@@ -22,20 +22,22 @@ class MatchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    if (match.isBye) {
-      return _buildByeCard(theme);
-    }
+    if (match.isBye) return _buildByeCard(theme);
     return _buildStandardCard(theme);
   }
 
-  /// Standard match card with team logos, names, and score preview.
+  // ─── Standard card ────────────────────────────────────────────────────────
+
   Widget _buildStandardCard(ThemeData theme) {
     final isCompleted = match.isCompleted;
     final homeGoals = match.homeGoals;
     final awayGoals = match.awayGoals;
-    final isP1Winner = isCompleted && (homeGoals ?? 0) > (awayGoals ?? 0);
-    final isP2Winner = isCompleted && (homeGoals ?? 0) < (awayGoals ?? 0);
+    final isP1Winner =
+        isCompleted && (homeGoals ?? 0) > (awayGoals ?? 0);
+    final isP2Winner =
+        isCompleted && (homeGoals ?? 0) < (awayGoals ?? 0);
+    final isDraw =
+        isCompleted && homeGoals != null && homeGoals == awayGoals;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -43,7 +45,8 @@ class MatchCard extends StatelessWidget {
         color: theme.cardTheme.color,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          onTap: isRoundActive ? onTap : null,
+          // Always tappable — detail screen handles inactive-round guard
+          onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Container(
             decoration: BoxDecoration(
@@ -51,7 +54,9 @@ class MatchCard extends StatelessWidget {
               border: Border(
                 left: BorderSide(
                   color: isCompleted
-                      ? theme.colorScheme.primary
+                      ? (isDraw
+                          ? Colors.blueGrey.shade400
+                          : theme.colorScheme.primary)
                       : Colors.white.withAlpha((255 * 0.06).toInt()),
                   width: isCompleted ? 3 : 1,
                 ),
@@ -69,79 +74,92 @@ class MatchCard extends StatelessWidget {
                 ),
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Match number badge
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    '#${index + 1}',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.grey.shade600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-
-                // Home team
-                Expanded(
-                  child: _buildTeamPreview(
-                    match.player1,
-                    isWinner: isP1Winner,
-                    isLoser: isP2Winner,
-                    align: CrossAxisAlignment.end,
-                    theme: theme,
-                  ),
-                ),
-
-                // Score / VS section
+                // ── Main match row ──────────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: _buildScorePreview(
-                    isCompleted: isCompleted,
-                    homeGoals: homeGoals,
-                    awayGoals: awayGoals,
+                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+                  child: Row(
+                    children: [
+                      // Match number badge
+                      SizedBox(
+                        width: 26,
+                        child: Text(
+                          '#${index + 1}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.grey.shade600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+
+                      // Home team
+                      Expanded(
+                        child: _buildTeamPreview(
+                          match.player1,
+                          isWinner: isP1Winner,
+                          isLoser: isP2Winner,
+                          alignRight: true,
+                          theme: theme,
+                        ),
+                      ),
+
+                      // Score / VS section
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: _buildScorePreview(
+                          isCompleted: isCompleted,
+                          homeGoals: homeGoals,
+                          awayGoals: awayGoals,
+                          isP1Winner: isP1Winner,
+                          isP2Winner: isP2Winner,
+                          theme: theme,
+                        ),
+                      ),
+
+                      // Away team
+                      Expanded(
+                        child: _buildTeamPreview(
+                          match.player2!,
+                          isWinner: isP2Winner,
+                          isLoser: isP1Winner,
+                          alignRight: false,
+                          theme: theme,
+                        ),
+                      ),
+
+                      // Status icon
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: isCompleted
+                            ? Icon(
+                                Icons.check_circle_rounded,
+                                color: isDraw
+                                    ? Colors.blueGrey.shade400
+                                    : theme.colorScheme.primary,
+                                size: 16,
+                              )
+                            : Icon(
+                                Icons.chevron_right_rounded,
+                                color: Colors.grey.shade600,
+                                size: 18,
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Winner / Draw badge row ─────────────────────────────
+                if (isCompleted)
+                  _buildResultBadgeRow(
                     isP1Winner: isP1Winner,
                     isP2Winner: isP2Winner,
+                    isDraw: isDraw,
                     theme: theme,
                   ),
-                ),
-
-                // Away team
-                Expanded(
-                  child: _buildTeamPreview(
-                    match.player2!,
-                    isWinner: isP2Winner,
-                    isLoser: isP1Winner,
-                    align: CrossAxisAlignment.start,
-                    theme: theme,
-                  ),
-                ),
-
-                // Tap affordance chevron (only if round is active)
-                if (isRoundActive && !isCompleted)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      color: Colors.grey.shade600,
-                      size: 18,
-                    ),
-                  )
-                else if (isCompleted)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: Icon(
-                      Icons.check_circle_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 16,
-                    ),
-                  )
-                else
-                  const SizedBox(width: 24),
               ],
             ),
           ),
@@ -150,25 +168,112 @@ class MatchCard extends StatelessWidget {
     );
   }
 
-  /// Compact team display for the preview card (logo + name side by side).
-  Widget _buildTeamPreview(
-    dynamic team,
-    {
-      required bool isWinner,
-      required bool isLoser,
-      required CrossAxisAlignment align,
-      required ThemeData theme,
+  // ─── Winner / draw badge row (shown only after result saved) ─────────────
+
+  Widget _buildResultBadgeRow({
+    required bool isP1Winner,
+    required bool isP2Winner,
+    required bool isDraw,
+    required ThemeData theme,
+  }) {
+    final String label;
+    final IconData icon;
+    final Color bgColor;
+    final Color fgColor;
+
+    if (isDraw) {
+      label = 'Draw';
+      icon = Icons.handshake_rounded;
+      bgColor = Colors.blueGrey.shade800;
+      fgColor = Colors.blueGrey.shade200;
+    } else if (isP1Winner) {
+      label = '${match.player1.teamName} wins';
+      icon = Icons.emoji_events_rounded;
+      bgColor = theme.colorScheme.primary.withAlpha((255 * 0.14).toInt());
+      fgColor = theme.colorScheme.primary;
+    } else {
+      label = '${match.player2!.teamName} wins';
+      icon = Icons.emoji_events_rounded;
+      bgColor = theme.colorScheme.primary.withAlpha((255 * 0.14).toInt());
+      fgColor = theme.colorScheme.primary;
     }
-  ) {
-    final isLeft = align == CrossAxisAlignment.end;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Row(
+        children: [
+          // Winner / Draw pill badge
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 12, color: fgColor),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: fgColor,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Tap hint
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.edit_rounded, size: 11, color: Colors.grey.shade700),
+              const SizedBox(width: 3),
+              Text(
+                'Edit',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Team name + logo preview ─────────────────────────────────────────────
+
+  Widget _buildTeamPreview(
+    dynamic team, {
+    required bool isWinner,
+    required bool isLoser,
+    required bool alignRight,
+    required ThemeData theme,
+  }) {
     return Opacity(
-      opacity: isLoser ? 0.45 : 1.0,
+      opacity: isLoser ? 0.4 : 1.0,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment:
-            isLeft ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: alignRight
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
-          if (!isLeft) ...[
+          if (!alignRight) ...[
             TeamLogoWidget(
               logoPath: team.logoPath,
               teamName: team.teamName,
@@ -183,17 +288,15 @@ class MatchCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               softWrap: false,
-              textAlign: isLeft ? TextAlign.right : TextAlign.left,
+              textAlign: alignRight ? TextAlign.right : TextAlign.left,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: isWinner ? FontWeight.w900 : FontWeight.w600,
-                color: isWinner
-                    ? theme.colorScheme.primary
-                    : Colors.white,
+                color: isWinner ? theme.colorScheme.primary : Colors.white,
               ),
             ),
           ),
-          if (isLeft) ...[
+          if (alignRight) ...[
             const SizedBox(width: 6),
             TeamLogoWidget(
               logoPath: team.logoPath,
@@ -207,7 +310,8 @@ class MatchCard extends StatelessWidget {
     );
   }
 
-  /// Score preview: shows `2 - 1` if played, `? - ?` if pending.
+  // ─── Score pill (center of card) ─────────────────────────────────────────
+
   Widget _buildScorePreview({
     required bool isCompleted,
     required int? homeGoals,
@@ -217,73 +321,53 @@ class MatchCard extends StatelessWidget {
     required ThemeData theme,
   }) {
     if (!isCompleted) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'vs',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              color: Colors.grey.shade600,
-              letterSpacing: 1.0,
-            ),
-          ),
-        ],
+      return Text(
+        'vs',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          color: Colors.grey.shade600,
+          letterSpacing: 1.0,
+        ),
       );
     }
 
-    final isDraw = homeGoals == awayGoals;
-    return Column(
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${homeGoals ?? 0}',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: isP1Winner ? theme.colorScheme.primary : Colors.white,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: Text(
-                '-',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade500,
-                ),
-              ),
-            ),
-            Text(
-              '${awayGoals ?? 0}',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: isP2Winner ? theme.colorScheme.primary : Colors.white,
-              ),
-            ),
-          ],
+        Text(
+          '${homeGoals ?? 0}',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            color: isP1Winner ? theme.colorScheme.primary : Colors.white,
+          ),
         ),
-        if (isDraw)
-          Text(
-            'DRAW',
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Text(
+            '–',
             style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
               color: Colors.grey.shade500,
-              letterSpacing: 1.0,
             ),
           ),
+        ),
+        Text(
+          '${awayGoals ?? 0}',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            color: isP2Winner ? theme.colorScheme.primary : Colors.white,
+          ),
+        ),
       ],
     );
   }
 
-  /// Slim bye-match card — no score, just shows team advancing automatically.
+  // ─── Bye card ─────────────────────────────────────────────────────────────
+
   Widget _buildByeCard(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -299,7 +383,6 @@ class MatchCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            // Team logo + name
             TeamLogoWidget(
               logoPath: match.player1.logoPath,
               teamName: match.player1.teamName,
@@ -319,11 +402,12 @@ class MatchCard extends StatelessWidget {
                 ),
               ),
             ),
-            // BYE pill
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withAlpha((255 * 0.12).toInt()),
+                color: theme.colorScheme.primary
+                    .withAlpha((255 * 0.12).toInt()),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
