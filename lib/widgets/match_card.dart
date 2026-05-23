@@ -49,34 +49,31 @@ class MatchCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
           child: Container(
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border(
-                left: BorderSide(
-                  color: isCompleted
-                      ? (isDraw
-                          ? Colors.blueGrey.shade400
-                          : theme.colorScheme.primary)
-                      : Colors.white.withAlpha((255 * 0.06).toInt()),
-                  width: isCompleted ? 3 : 1,
-                ),
-                top: BorderSide(
-                  color: Colors.white.withAlpha((255 * 0.06).toInt()),
-                  width: 1,
-                ),
-                right: BorderSide(
-                  color: Colors.white.withAlpha((255 * 0.06).toInt()),
-                  width: 1,
-                ),
-                bottom: BorderSide(
-                  color: Colors.white.withAlpha((255 * 0.06).toInt()),
-                  width: 1,
-                ),
+              border: Border.all(
+                color: Colors.white.withAlpha((255 * 0.06).toInt()),
+                width: 1,
               ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: Stack(
               children: [
+                if (isCompleted)
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 3,
+                    child: Container(
+                      color: isDraw
+                          ? Colors.blueGrey.shade400
+                          : theme.colorScheme.primary,
+                    ),
+                  ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                 // ── Main match row ──────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
@@ -162,10 +159,12 @@ class MatchCard extends StatelessWidget {
                   ),
               ],
             ),
-          ),
+          ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   // ─── Winner / draw badge row (shown only after result saved) ─────────────

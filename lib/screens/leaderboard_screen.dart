@@ -411,6 +411,7 @@ class LeaderboardScreen extends StatelessWidget {
           Container(
             height: columnHeight,
             width: double.infinity,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -424,21 +425,33 @@ class LeaderboardScreen extends StatelessWidget {
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
               ),
-              border: Border(
-                top: BorderSide(color: medalColor, width: 2.0),
-                left: BorderSide(color: medalColor.withAlpha((255 * 0.15).toInt()), width: 1.0),
-                right: BorderSide(color: medalColor.withAlpha((255 * 0.15).toInt()), width: 1.0),
+              border: Border.all(
+                color: medalColor.withAlpha((255 * 0.15).toInt()),
+                width: 1.0,
               ),
             ),
-            child: Center(
-              child: Text(
-                positionLabel,
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 15,
-                  color: medalColor,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 2,
+                  child: Container(
+                    color: medalColor,
+                  ),
                 ),
-              ),
+                Center(
+                  child: Text(
+                    positionLabel,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: medalColor,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
