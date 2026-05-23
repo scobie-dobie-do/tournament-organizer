@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../storage/database_service.dart';
 import '../logic/tournament_logic.dart';
 import '../models/player.dart';
-import 'match_screen.dart';
+import 'match_list_screen.dart';
 import 'leaderboard_screen.dart';
 import 'create_tournament_screen.dart';
 import '../widgets/team_logo_widget.dart';
@@ -86,7 +86,7 @@ class _TournamentHistoryScreenState extends State<TournamentHistoryScreen> {
     } else {
       Navigator.push(
         context,
-        _createAnimatedRoute(MatchScreen(tournamentState: state)),
+        _createAnimatedRoute(MatchListScreen(tournamentState: state)),
       ).then((_) => _loadHistory());
     }
   }

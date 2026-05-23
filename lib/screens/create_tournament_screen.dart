@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/player.dart';
 import '../logic/tournament_logic.dart';
-import 'match_screen.dart';
+import 'match_list_screen.dart';
 import 'logo_search_screen.dart';
 import '../widgets/team_logo_widget.dart';
 
@@ -137,7 +137,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       context,
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            MatchScreen(tournamentState: tournamentState),
+            MatchListScreen(tournamentState: tournamentState),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.0, 0.05);
           const end = Offset.zero;
