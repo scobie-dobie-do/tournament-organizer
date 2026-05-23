@@ -3,7 +3,7 @@ import '../storage/database_service.dart';
 import '../logic/tournament_logic.dart';
 import '../models/player.dart';
 import 'match_list_screen.dart';
-import 'leaderboard_screen.dart';
+import 'standings_screen.dart';
 import 'create_tournament_screen.dart';
 import '../widgets/team_logo_widget.dart';
 
@@ -81,7 +81,7 @@ class _TournamentHistoryScreenState extends State<TournamentHistoryScreen> {
     if (state.isCompleted) {
       Navigator.push(
         context,
-        _createAnimatedRoute(LeaderboardScreen(tournamentState: state)),
+        _createAnimatedRoute(StandingsScreen(tournamentState: state)),
       ).then((_) => _loadHistory());
     } else {
       Navigator.push(

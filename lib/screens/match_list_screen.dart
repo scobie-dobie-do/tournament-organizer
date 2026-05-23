@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/match.dart';
 import '../models/player.dart';
 import '../logic/tournament_logic.dart';
-import 'leaderboard_screen.dart';
+import 'standings_screen.dart';
 import 'match_detail_screen.dart';
 import '../widgets/match_card.dart';
 
@@ -199,7 +199,7 @@ class _MatchListScreenState extends State<MatchListScreen>
             onPressed: () {
               Navigator.push(
                 context,
-                _slideRoute(LeaderboardScreen(tournamentState: state)),
+                _slideRoute(StandingsScreen(tournamentState: state)),
               ).then((_) {
                 if (mounted) setState(() {});
               });
@@ -339,7 +339,7 @@ class _MatchListScreenState extends State<MatchListScreen>
             onPressed: () {
               Navigator.push(
                 context,
-                _slideRoute(LeaderboardScreen(tournamentState: state)),
+                _slideRoute(StandingsScreen(tournamentState: state)),
               );
             },
             style: ElevatedButton.styleFrom(
