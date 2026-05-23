@@ -546,8 +546,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     required ThemeData theme,
   }) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: isEditable ? 4 : 8,
+        vertical: isEditable ? 8 : 10,
+      ),
       decoration: BoxDecoration(
         color: isWinnerScore
             ? theme.colorScheme.primary
@@ -562,35 +564,44 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           width: 1.5,
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          if (isEditable)
-            _GoalButton(
-                icon: Icons.remove,
-                onPressed: onDecrement,
-                theme: theme)
-          else
-            const SizedBox(width: 32),
-          Text(
-            '$goals',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              color: isWinnerScore
-                  ? theme.colorScheme.primary
-                  : Colors.white,
+      child: isEditable
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _GoalButton(
+                  icon: Icons.remove,
+                  onPressed: onDecrement,
+                  theme: theme,
+                ),
+                Text(
+                  '$goals',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    color: isWinnerScore
+                        ? theme.colorScheme.primary
+                        : Colors.white,
+                  ),
+                ),
+                _GoalButton(
+                  icon: Icons.add,
+                  onPressed: onIncrement,
+                  theme: theme,
+                ),
+              ],
+            )
+          : Center(
+              child: Text(
+                '$goals',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: isWinnerScore
+                      ? theme.colorScheme.primary
+                      : Colors.white,
+                ),
+              ),
             ),
-          ),
-          if (isEditable)
-            _GoalButton(
-                icon: Icons.add,
-                onPressed: onIncrement,
-                theme: theme)
-          else
-            const SizedBox(width: 32),
-        ],
-      ),
     );
   }
 
@@ -637,11 +648,11 @@ class _GoalButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 32,
-      height: 32,
+      width: 28,
+      height: 28,
       child: IconButton(
         padding: EdgeInsets.zero,
-        icon: Icon(icon, size: 16),
+        icon: Icon(icon, size: 14),
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: onPressed != null
