@@ -110,37 +110,25 @@ class _MatchListScreenState extends State<MatchListScreen>
       context,
       _slideUpRoute(
         MatchDetailScreen(
-          // Always pass the LIVE match from state so we show fresh data
-          match: state.matches.firstWhere(
-            (m) => m.id == match.id,
-            orElse: () => match,
-          ),
-          format: state.format,
+          tournamentState: state,
+          matchId: match.id,
           isRoundActive: isRoundActive,
-          onSaveResult: (hg, ag) {
-            setState(() {
-              state.recordMatchResult(match.id, hg, ag);
-              if (state.format == TournamentFormat.knockout) {
-                _syncTabController();
-              }
-            });
-          },
-          onClearResult: () {
-            setState(() {
-              state.clearMatchResult(match.id);
-              if (state.format == TournamentFormat.knockout) {
-                _syncTabController();
-              }
-            });
-          },
         ),
       ),
     ).then((_) {
-      // Always force a rebuild on return so winner badges and scores
-      // instantly reflect the latest state — regardless of save or cancel.
-      if (mounted) setState(() {});
+      // Always force a full rebuild when returning from detail.
+      // state.matches is already updated (mutated in-place) by MatchDetailScreen.
+      if (mounted) {
+        setState(() {
+          // Re-sync tab controller for knockout in case rounds changed.
+          if (state.format == TournamentFormat.knockout) {
+            _syncTabController();
+          }
+        });
+      }
     });
   }
+
 
   void _advanceRound() {
     setState(() {

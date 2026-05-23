@@ -5,23 +5,23 @@ import '../logic/tournament_logic.dart';
 import '../widgets/team_logo_widget.dart';
 
 /// Match Detail Screen — full score editing for a single match.
-/// Opened when a user taps a match card from the Match List Screen.
-/// Returns `true` via Navigator.pop() when a result is saved/cleared
-/// so the parent list screen can refresh.
+/// Receives [tournamentState] directly and mutates it inline.
+/// Returns `true` via Navigator.pop() when a result is saved/cleared.
 class MatchDetailScreen extends StatefulWidget {
-  final TournamentMatch match;
-  final TournamentFormat format;
+  /// The live tournament state — mutated in-place on save/undo.
+  final TournamentState tournamentState;
+
+  /// The ID of the match to edit — used to always look up the freshest copy.
+  final String matchId;
+
+  /// Whether this round is currently active (controls save/undo buttons).
   final bool isRoundActive;
-  final void Function(int homeGoals, int awayGoals) onSaveResult;
-  final VoidCallback onClearResult;
 
   const MatchDetailScreen({
     super.key,
-    required this.match,
-    required this.format,
+    required this.tournamentState,
+    required this.matchId,
     required this.isRoundActive,
-    required this.onSaveResult,
-    required this.onClearResult,
   });
 
   @override
@@ -32,18 +32,23 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
   late int _homeGoals;
   late int _awayGoals;
 
+  /// Always look up the freshest match from the live state.
+  TournamentMatch get _livematch => widget.tournamentState.matches
+      .firstWhere((m) => m.id == widget.matchId);
+
   @override
   void initState() {
     super.initState();
-    _homeGoals = widget.match.homeGoals ?? 0;
-    _awayGoals = widget.match.awayGoals ?? 0;
+    final m = _livematch;
+    _homeGoals = m.homeGoals ?? 0;
+    _awayGoals = m.awayGoals ?? 0;
   }
 
-  bool get _isCompleted => widget.match.isCompleted;
   bool get _isDraw => _homeGoals == _awayGoals;
-  bool get _isKnockout => widget.format == TournamentFormat.knockout;
+  bool get _isKnockout =>
+      widget.tournamentState.format == TournamentFormat.knockout;
 
-  // ─── Save ─────────────────────────────────────────────────────────────────
+  // ─── Save ──────────────────────────────────────────────────────────────────
 
   void _onSaveTap() {
     if (_isKnockout && _isDraw) {
@@ -54,19 +59,20 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
           ),
           backgroundColor: Theme.of(context).colorScheme.error,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       return;
     }
-
     _showConfirmDialog();
   }
 
   void _showConfirmDialog() {
     final theme = Theme.of(context);
-    final p1 = widget.match.player1;
-    final p2 = widget.match.player2!;
+    final m = _livematch;
+    final p1 = m.player1;
+    final p2 = m.player2!;
 
     showDialog<bool>(
       context: context,
@@ -86,7 +92,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             ),
             const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
@@ -157,19 +164,23 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text('Save',
+                style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
     ).then((confirmed) {
       if (confirmed == true && mounted) {
-        widget.onSaveResult(_homeGoals, _awayGoals);
+        // Mutate the shared TournamentState directly, then pop.
+        // MatchListScreen will call setState in its .then() callback.
+        widget.tournamentState
+            .recordMatchResult(widget.matchId, _homeGoals, _awayGoals);
         Navigator.pop(context, true);
       }
     });
   }
 
-  // ─── Undo ─────────────────────────────────────────────────────────────────
+  // ─── Undo ──────────────────────────────────────────────────────────────────
 
   void _onUndoTap() {
     showDialog<bool>(
@@ -183,40 +194,46 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         ),
         content: Text(
           'This will clear the saved result and mark the match as pending again. Continue?',
-          style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          style:
+              TextStyle(color: Colors.grey.shade400, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade400)),
+            child: Text('Cancel',
+                style: TextStyle(color: Colors.grey.shade400)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
             ),
-            child: const Text('Undo', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text('Undo',
+                style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
     ).then((confirmed) {
       if (confirmed == true && mounted) {
-        widget.onClearResult();
+        widget.tournamentState.clearMatchResult(widget.matchId);
         Navigator.pop(context, true);
       }
     });
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────
+  // ─── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final match = widget.match;
+    final match = _livematch;
     final p1 = match.player1;
     final p2 = match.player2!;
-    final isP1Winner = _isCompleted && (match.homeGoals ?? 0) > (match.awayGoals ?? 0);
-    final isP2Winner = _isCompleted && (match.homeGoals ?? 0) < (match.awayGoals ?? 0);
+    final isCompleted = match.isCompleted;
+    final isP1Winner =
+        isCompleted && (match.homeGoals ?? 0) > (match.awayGoals ?? 0);
+    final isP2Winner =
+        isCompleted && (match.homeGoals ?? 0) < (match.awayGoals ?? 0);
 
     return Scaffold(
       appBar: AppBar(
@@ -232,23 +249,29 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Status badge ───────────────────────────────────────
+              // ── Status badge ─────────────────────────────────────────
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _isCompleted
-                        ? theme.colorScheme.primary.withAlpha((255 * 0.12).toInt())
-                        : Colors.orange.withAlpha((255 * 0.12).toInt()),
+                    color: isCompleted
+                        ? theme.colorScheme.primary
+                            .withAlpha((255 * 0.12).toInt())
+                        : Colors.orange
+                            .withAlpha((255 * 0.12).toInt()),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: _isCompleted
-                          ? theme.colorScheme.primary.withAlpha((255 * 0.4).toInt())
-                          : Colors.orange.withAlpha((255 * 0.4).toInt()),
+                      color: isCompleted
+                          ? theme.colorScheme.primary
+                              .withAlpha((255 * 0.4).toInt())
+                          : Colors.orange
+                              .withAlpha((255 * 0.4).toInt()),
                       width: 1,
                     ),
                   ),
@@ -256,22 +279,22 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _isCompleted
+                        isCompleted
                             ? Icons.check_circle_rounded
                             : Icons.hourglass_empty_rounded,
                         size: 14,
-                        color: _isCompleted
+                        color: isCompleted
                             ? theme.colorScheme.primary
                             : Colors.orange,
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _isCompleted ? 'COMPLETED' : 'PENDING',
+                        isCompleted ? 'COMPLETED' : 'PENDING',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.0,
-                          color: _isCompleted
+                          color: isCompleted
                               ? theme.colorScheme.primary
                               : Colors.orange,
                         ),
@@ -283,61 +306,56 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
               const SizedBox(height: 32),
 
-              // ── Teams & Score ───────────────────────────────────────
+              // ── Teams & Score card ────────────────────────────────────
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Top row: home team | score | away team
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // Home team
                           Expanded(
                             flex: 3,
                             child: _buildTeamPanel(
                               team: p1,
                               isWinner: isP1Winner,
                               isLoser: isP2Winner,
-                              align: CrossAxisAlignment.center,
                               theme: theme,
                             ),
                           ),
-
-                          // Score section
                           Expanded(
                             flex: 4,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: _buildScoreSection(theme),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8),
+                              child: _buildScoreSection(
+                                  isCompleted, theme),
                             ),
                           ),
-
-                          // Away team
                           Expanded(
                             flex: 3,
                             child: _buildTeamPanel(
                               team: p2,
                               isWinner: isP2Winner,
                               isLoser: isP1Winner,
-                              align: CrossAxisAlignment.center,
                               theme: theme,
                             ),
                           ),
                         ],
                       ),
 
-                      // Winner label
-                      if (_isCompleted) ...[
+                      // Result summary (shown only when completed)
+                      if (isCompleted) ...[
                         const SizedBox(height: 16),
                         Divider(
-                          color: Colors.white.withAlpha((255 * 0.06).toInt()),
+                          color:
+                              Colors.white.withAlpha((255 * 0.06).toInt()),
                           height: 1,
                         ),
                         const SizedBox(height: 12),
-                        _buildResultSummary(p1, p2, theme),
+                        _buildResultSummary(match, p1, p2, theme),
                       ],
                     ],
                   ),
@@ -346,16 +364,16 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
 
               const SizedBox(height: 24),
 
-              // ── Action Buttons ──────────────────────────────────────
+              // ── Action buttons ────────────────────────────────────────
               if (widget.isRoundActive && !match.isBye) ...[
-                if (!_isCompleted) ...[
-                  // Save Result Button
+                if (!isCompleted)
                   ElevatedButton.icon(
                     onPressed: _onSaveTap,
                     icon: const Icon(Icons.save_rounded, size: 20),
                     label: const Text(
                       'Save Result',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w900),
                     ),
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size.fromHeight(54),
@@ -365,21 +383,22 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                  ),
-                ] else ...[
-                  // Undo Result Button
+                  )
+                else
                   OutlinedButton.icon(
                     onPressed: _onUndoTap,
                     icon: const Icon(Icons.undo_rounded, size: 20),
                     label: const Text(
                       'Undo Result',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w900),
                     ),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(54),
                       foregroundColor: theme.colorScheme.error,
                       side: BorderSide(
-                        color: theme.colorScheme.error.withAlpha((255 * 0.6).toInt()),
+                        color: theme.colorScheme.error
+                            .withAlpha((255 * 0.6).toInt()),
                         width: 1.5,
                       ),
                       shape: RoundedRectangleBorder(
@@ -387,10 +406,8 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
                       ),
                     ),
                   ),
-                ],
               ],
 
-              // Round inactive hint
               if (!widget.isRoundActive)
                 Center(
                   child: Padding(
@@ -414,20 +431,19 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     );
   }
 
-  // ─── Sub-widgets ──────────────────────────────────────────────────────────
+  // ─── Sub-builders ──────────────────────────────────────────────────────────
 
   Widget _buildTeamPanel({
     required Player team,
     required bool isWinner,
     required bool isLoser,
-    required CrossAxisAlignment align,
     required ThemeData theme,
   }) {
     return Opacity(
       opacity: isLoser ? 0.45 : 1.0,
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: align,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           TeamLogoWidget(
             logoPath: team.logoPath,
@@ -444,8 +460,11 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
-              fontWeight: isWinner ? FontWeight.w900 : FontWeight.bold,
-              color: isWinner ? theme.colorScheme.primary : Colors.white,
+              fontWeight:
+                  isWinner ? FontWeight.w900 : FontWeight.bold,
+              color: isWinner
+                  ? theme.colorScheme.primary
+                  : Colors.white,
             ),
           ),
           if (team.name.isNotEmpty) ...[
@@ -467,21 +486,19 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     );
   }
 
-  Widget _buildScoreSection(ThemeData theme) {
+  Widget _buildScoreSection(bool isCompleted, ThemeData theme) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Home team score control
         _buildScoreControl(
           goals: _homeGoals,
-          onDecrement: _homeGoals > 0 ? () => setState(() => _homeGoals--) : null,
+          onDecrement:
+              _homeGoals > 0 ? () => setState(() => _homeGoals--) : null,
           onIncrement: () => setState(() => _homeGoals++),
-          isEditable: !_isCompleted && widget.isRoundActive,
-          isWinnerScore: !_isCompleted ? false
-              : _homeGoals > _awayGoals,
+          isEditable: !isCompleted && widget.isRoundActive,
+          isWinnerScore: isCompleted && _homeGoals > _awayGoals,
           theme: theme,
         ),
-
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
           child: Text(
@@ -495,19 +512,16 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             ),
           ),
         ),
-
-        // Away team score control
         _buildScoreControl(
           goals: _awayGoals,
-          onDecrement: _awayGoals > 0 ? () => setState(() => _awayGoals--) : null,
+          onDecrement:
+              _awayGoals > 0 ? () => setState(() => _awayGoals--) : null,
           onIncrement: () => setState(() => _awayGoals++),
-          isEditable: !_isCompleted && widget.isRoundActive,
-          isWinnerScore: !_isCompleted ? false
-              : _awayGoals > _homeGoals,
+          isEditable: !isCompleted && widget.isRoundActive,
+          isWinnerScore: isCompleted && _awayGoals > _homeGoals,
           theme: theme,
         ),
-
-        if (!_isCompleted && _isKnockout && _isDraw && _homeGoals > 0) ...[
+        if (!isCompleted && _isKnockout && _isDraw && _homeGoals > 0) ...[
           const SizedBox(height: 8),
           Text(
             'Draw not allowed in Knockout',
@@ -532,15 +546,18 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     required ThemeData theme,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: isWinnerScore
-            ? theme.colorScheme.primary.withAlpha((255 * 0.1).toInt())
+            ? theme.colorScheme.primary
+                .withAlpha((255 * 0.1).toInt())
             : theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isWinnerScore
-              ? theme.colorScheme.primary.withAlpha((255 * 0.3).toInt())
+              ? theme.colorScheme.primary
+                  .withAlpha((255 * 0.3).toInt())
               : Colors.white.withAlpha((255 * 0.05).toInt()),
           width: 1.5,
         ),
@@ -548,33 +565,28 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Decrement button
           if (isEditable)
             _GoalButton(
-              icon: Icons.remove,
-              onPressed: onDecrement,
-              theme: theme,
-            )
+                icon: Icons.remove,
+                onPressed: onDecrement,
+                theme: theme)
           else
             const SizedBox(width: 32),
-
-          // Score number
           Text(
             '$goals',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w900,
-              color: isWinnerScore ? theme.colorScheme.primary : Colors.white,
+              color: isWinnerScore
+                  ? theme.colorScheme.primary
+                  : Colors.white,
             ),
           ),
-
-          // Increment button
           if (isEditable)
             _GoalButton(
-              icon: Icons.add,
-              onPressed: onIncrement,
-              theme: theme,
-            )
+                icon: Icons.add,
+                onPressed: onIncrement,
+                theme: theme)
           else
             const SizedBox(width: 32),
         ],
@@ -582,19 +594,16 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
     );
   }
 
-  Widget _buildResultSummary(Player p1, Player p2, ThemeData theme) {
-    final homeGoals = widget.match.homeGoals ?? 0;
-    final awayGoals = widget.match.awayGoals ?? 0;
-    final isDraw = homeGoals == awayGoals;
-
-    String label;
-    if (isDraw) {
-      label = 'Match Drawn';
-    } else if (homeGoals > awayGoals) {
-      label = '${p1.teamName} wins';
-    } else {
-      label = '${p2.teamName} wins';
-    }
+  Widget _buildResultSummary(
+      TournamentMatch match, Player p1, Player p2, ThemeData theme) {
+    final hg = match.homeGoals ?? 0;
+    final ag = match.awayGoals ?? 0;
+    final isDraw = hg == ag;
+    final label = isDraw
+        ? 'Match Drawn'
+        : hg > ag
+            ? '${p1.teamName} wins'
+            : '${p2.teamName} wins';
 
     return Text(
       label,
@@ -604,13 +613,16 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
       style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w900,
-        color: isDraw ? Colors.grey.shade400 : theme.colorScheme.primary,
+        color: isDraw
+            ? Colors.grey.shade400
+            : theme.colorScheme.primary,
       ),
     );
   }
 }
 
-/// Small ± goal button used in the score control.
+// ─── Goal Button ─────────────────────────────────────────────────────────────
+
 class _GoalButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
@@ -634,11 +646,13 @@ class _GoalButton extends StatelessWidget {
         style: IconButton.styleFrom(
           backgroundColor: onPressed != null
               ? theme.colorScheme.surfaceContainerHighest
-              : theme.colorScheme.surfaceContainerLow.withAlpha((255 * 0.4).toInt()),
+              : theme.colorScheme.surfaceContainerLow
+                  .withAlpha((255 * 0.4).toInt()),
           foregroundColor: onPressed != null
               ? theme.colorScheme.primary
               : Colors.grey.shade700,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
         ),
       ),
     );
