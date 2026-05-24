@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 class TeamLogoWidget extends StatelessWidget {
   final String? logoPath;
@@ -55,45 +54,14 @@ class TeamLogoWidget extends StatelessWidget {
     Widget? imageWidget;
 
     if (logoPath != null && logoPath!.isNotEmpty) {
-      if (logoPath!.startsWith('http://') || logoPath!.startsWith('https://')) {
-        // Remote URL (primarily for logo search list preview)
-        imageWidget = CachedNetworkImage(
-          imageUrl: logoPath!,
-          httpHeaders: const {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          placeholder: (context, url) => Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: cardColor,
-              shape: BoxShape.circle,
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(size * 0.25),
-              child: const CircularProgressIndicator(
-                strokeWidth: 2,
-              ),
-            ),
-          ),
-          errorWidget: (context, url, error) => buildPlaceholder(),
-        );
-      } else {
-        // Local File Path
-        final file = File(logoPath!);
-        if (file.existsSync()) {
-          imageWidget = Image.file(
-            file,
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => buildPlaceholder(),
-          );
-        }
-      }
+      final file = File(logoPath!);
+      imageWidget = Image.file(
+        file,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => buildPlaceholder(),
+      );
     }
 
     // Wrap the image in a circular clip with optional border

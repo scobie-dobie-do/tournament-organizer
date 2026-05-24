@@ -96,6 +96,10 @@ void main() {
       // Check title
       expect(find.text('League Standings'), findsOneWidget);
 
+      // Toggle to Full Stats mode so the extra stats and Form column are visible
+      await tester.tap(find.text('FULL STATS'));
+      await tester.pumpAndSettle();
+
       // Check header cells
       expect(find.text('Team'), findsOneWidget);
       expect(find.text('PTS'), findsOneWidget);

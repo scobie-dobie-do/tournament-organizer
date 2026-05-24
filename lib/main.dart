@@ -4,10 +4,10 @@ import 'storage/database_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize local Hive database
   await DatabaseService().init();
-  
+
   runApp(const TournamentOrganizerApp());
 }
 
@@ -23,9 +23,9 @@ class TournamentOrganizerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Tournament Organizer',
       debugShowCheckedModeBanner: false,
-      
+
       themeMode: ThemeMode.dark,
-      
+
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
@@ -50,9 +50,7 @@ class TournamentOrganizerApp extends StatelessWidget {
             fontWeight: FontWeight.w900,
             letterSpacing: 0.5,
           ),
-          iconTheme: IconThemeData(
-            color: greenAccent,
-          ),
+          iconTheme: IconThemeData(color: greenAccent),
         ),
         cardTheme: CardThemeData(
           color: darkGrayCard,
@@ -82,18 +80,13 @@ class TournamentOrganizerApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(
-              color: greenAccent,
-              width: 2.0,
-            ),
+            borderSide: const BorderSide(color: greenAccent, width: 2.0),
           ),
           labelStyle: TextStyle(
             color: Colors.grey.shade400,
             fontWeight: FontWeight.w600,
           ),
-          hintStyle: TextStyle(
-            color: Colors.grey.shade600,
-          ),
+          hintStyle: TextStyle(color: Colors.grey.shade600),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -112,7 +105,7 @@ class TournamentOrganizerApp extends StatelessWidget {
           ),
         ),
       ),
-      
+
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
@@ -121,7 +114,7 @@ class TournamentOrganizerApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      
+
       home: const SplashScreen(),
     );
   }

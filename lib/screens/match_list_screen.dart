@@ -20,47 +20,17 @@ class MatchListScreen extends StatefulWidget {
   State<MatchListScreen> createState() => _MatchListScreenState();
 }
 
-class _MatchListScreenState extends State<MatchListScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _MatchListScreenState extends State<MatchListScreen> {
   String _filter = 'All';
 
   @override
   void initState() {
     super.initState();
-    _initTabController();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     super.dispose();
-  }
-
-  void _initTabController() {
-    final state = widget.tournamentState;
-    if (state.format == TournamentFormat.knockout) {
-      _tabController = TabController(
-        length: state.currentRoundIndex,
-        vsync: this,
-        initialIndex: state.currentRoundIndex - 1,
-      );
-    } else {
-      _tabController = TabController(length: 1, vsync: this);
-    }
-  }
-
-  void _syncTabController() {
-    final state = widget.tournamentState;
-    final newLength = state.currentRoundIndex;
-    if (_tabController.length != newLength) {
-      _tabController.dispose();
-      _tabController = TabController(
-        length: newLength,
-        vsync: this,
-        initialIndex: newLength - 1,
-      );
-    }
   }
 
   // ─── Navigation ───────────────────────────────────────────────────────────
@@ -119,12 +89,7 @@ class _MatchListScreenState extends State<MatchListScreen>
       // Always force a full rebuild when returning from detail.
       // state.matches is already updated (mutated in-place) by MatchDetailScreen.
       if (mounted) {
-        setState(() {
-          // Re-sync tab controller for knockout in case rounds changed.
-          if (state.format == TournamentFormat.knockout) {
-            _syncTabController();
-          }
-        });
+        setState(() {});
       }
     });
   }
@@ -133,7 +98,6 @@ class _MatchListScreenState extends State<MatchListScreen>
   void _advanceRound() {
     setState(() {
       widget.tournamentState.advanceKnockoutRound();
-      _syncTabController();
     });
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -185,7 +149,7 @@ class _MatchListScreenState extends State<MatchListScreen>
     final theme = Theme.of(context);
     final champion = _getChampion();
 
-    return Scaffold(
+    Widget content = Scaffold(
       appBar: AppBar(
         title: Text(
           state.format == TournamentFormat.knockout
@@ -209,7 +173,6 @@ class _MatchListScreenState extends State<MatchListScreen>
         ],
         bottom: state.format == TournamentFormat.knockout
             ? TabBar(
-                controller: _tabController,
                 isScrollable: state.currentRoundIndex > 4,
                 indicatorColor: theme.colorScheme.primary,
                 labelColor: theme.colorScheme.primary,
@@ -239,7 +202,6 @@ class _MatchListScreenState extends State<MatchListScreen>
             Expanded(
               child: state.format == TournamentFormat.knockout
                   ? TabBarView(
-                      controller: _tabController,
                       children: List.generate(
                         state.currentRoundIndex,
                         (roundIdx) {
@@ -264,6 +226,17 @@ class _MatchListScreenState extends State<MatchListScreen>
         ),
       ),
     );
+
+    if (state.format == TournamentFormat.knockout) {
+      content = DefaultTabController(
+        key: ValueKey('ko_tabs_${state.currentRoundIndex}'),
+        length: state.currentRoundIndex,
+        initialIndex: state.currentRoundIndex - 1,
+        child: content,
+      );
+    }
+
+    return content;
   }
 
   // ─── Section builders ─────────────────────────────────────────────────────

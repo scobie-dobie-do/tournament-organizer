@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../logic/tournament_logic.dart';
 import '../logic/standings_calculator.dart';
-import '../widgets/standings_row.dart';
+import '../widgets/leaderboard_table.dart';
 import '../widgets/team_logo_widget.dart';
 
 class StandingsScreen extends StatefulWidget {
@@ -20,6 +20,7 @@ class StandingsScreen extends StatefulWidget {
 class _StandingsScreenState extends State<StandingsScreen> with TickerProviderStateMixin {
   late List<TeamStats> _currentStandings;
   final Map<String, int> _previousRankings = {}; // teamId -> rank (1-indexed)
+  bool _isShortView = true;
 
   // Confetti Particle Effect State
   late AnimationController _confettiController;
@@ -125,83 +126,45 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. Visual Podium (if at least 2 players exist)
-                if (_currentStandings.length >= 2)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: _buildVisualPodium(_currentStandings, theme),
-                  ),
+                 // 1. Visual Podium (if at least 2 players exist)
+                 if (_currentStandings.length >= 2)
+                   Padding(
+                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                     child: _buildVisualPodium(_currentStandings, theme),
+                   ),
 
-                // 2. Table Area
-                Expanded(
-                  child: _currentStandings.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No statistics available.',
-                            style: TextStyle(color: Colors.grey.shade500),
-                          ),
-                        )
-                      : SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                            child: Card(
-                              margin: EdgeInsets.zero,
-                              child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: SizedBox(
-                                    width: 600, // Total columns width including Form
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: [
-                                        // Header Row (Fixed)
-                                        _buildHeaderRow(theme),
-                                        const SizedBox(height: 4),
+                 // 1b. Mode Toggle Switch
+                 _buildToggleBar(theme),
 
-                                        // Scrollable Animated List of Rows via Stack
-                                        SizedBox(
-                                          height: _currentStandings.length * rowHeight,
-                                          child: Stack(
-                                            children: List.generate(_currentStandings.length, (index) {
-                                              final entry = _currentStandings[index];
-                                              final teamId = entry.team.id;
-                                              final prevRank = _previousRankings[teamId];
-                                              final formList = StandingsCalculator.calculateForm(
-                                                entry.team,
-                                                widget.tournamentState.matches,
-                                              );
-
-                                              return AnimatedPositioned(
-                                                key: ValueKey(teamId),
-                                                top: index * rowHeight,
-                                                left: 0,
-                                                right: 0,
-                                                height: rowHeight,
-                                                duration: const Duration(milliseconds: 550),
-                                                curve: Curves.easeInOut,
-                                                child: StandingsRow(
-                                                  stats: entry,
-                                                  rank: index + 1,
-                                                  previousRank: prevRank,
-                                                  form: formList,
-                                                  isEvenRow: index.isEven,
-                                                ),
-                                              );
-                                            }),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                ),
+                 // 2. Table Area
+                 Expanded(
+                   child: _currentStandings.isEmpty
+                       ? Center(
+                           child: Text(
+                             'No statistics available.',
+                             style: TextStyle(color: Colors.grey.shade500),
+                           ),
+                         )
+                       : SingleChildScrollView(
+                           physics: const BouncingScrollPhysics(),
+                           child: Padding(
+                             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                             child: Card(
+                               margin: EdgeInsets.zero,
+                               child: Padding(
+                                 padding: const EdgeInsets.all(8.0),
+                                 child: LeaderboardTable(
+                                   standings: _currentStandings,
+                                   matches: widget.tournamentState.matches,
+                                   previousRankings: _previousRankings,
+                                   isShortView: _isShortView,
+                                   rowHeight: rowHeight,
+                                 ),
+                               ),
+                             ),
+                           ),
+                         ),
+                 ),
                 const SizedBox(height: 16),
               ],
             ),
@@ -220,42 +183,58 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildHeaderRow(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withAlpha((255 * 0.4).toInt()),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: Row(
-        children: [
-          _buildHeaderCell('#', width: 36),
-          _buildHeaderCell('Team', width: 180, align: TextAlign.left),
-          _buildHeaderCell('MP', width: 36),
-          _buildHeaderCell('W', width: 32),
-          _buildHeaderCell('D', width: 32),
-          _buildHeaderCell('L', width: 32),
-          _buildHeaderCell('GF', width: 38),
-          _buildHeaderCell('GA', width: 38),
-          _buildHeaderCell('GD', width: 44),
-          _buildHeaderCell('PTS', width: 42, isBold: true),
-          _buildHeaderCell('Form', width: 90),
-        ],
+  Widget _buildToggleBar(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Center(
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.cardTheme.color,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withAlpha((255 * 0.05).toInt()),
+              width: 1.0,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildToggleButton('SHORT VIEW', true, theme),
+                _buildToggleButton('FULL STATS', false, theme),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildHeaderCell(String text, {required double width, TextAlign align = TextAlign.center, bool isBold = false}) {
-    return SizedBox(
-      width: width,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+  Widget _buildToggleButton(String label, bool value, ThemeData theme) {
+    final isSelected = _isShortView == value;
+    return GestureDetector(
+      onTap: () {
+        if (_isShortView != value) {
+          setState(() {
+            _isShortView = value;
+          });
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
         child: Text(
-          text,
-          textAlign: align,
+          label,
           style: TextStyle(
+            color: isSelected ? theme.colorScheme.surface : Colors.grey.shade400,
+            fontWeight: FontWeight.w900,
             fontSize: 11,
-            fontWeight: isBold ? FontWeight.w900 : FontWeight.bold,
-            color: Colors.grey.shade400,
             letterSpacing: 0.5,
           ),
         ),

@@ -2,27 +2,29 @@ import 'package:flutter/material.dart';
 import '../logic/tournament_logic.dart';
 import '../widgets/team_logo_widget.dart';
 
-class StandingsRow extends StatefulWidget {
+class LeaderboardRow extends StatefulWidget {
   final TeamStats stats;
   final int rank;
   final int? previousRank;
   final List<String> form;
   final bool isEvenRow;
+  final bool isShortView;
 
-  const StandingsRow({
+  const LeaderboardRow({
     super.key,
     required this.stats,
     required this.rank,
     required this.previousRank,
     required this.form,
     required this.isEvenRow,
+    required this.isShortView,
   });
 
   @override
-  State<StandingsRow> createState() => _StandingsRowState();
+  State<LeaderboardRow> createState() => _LeaderboardRowState();
 }
 
-class _StandingsRowState extends State<StandingsRow> with SingleTickerProviderStateMixin {
+class _LeaderboardRowState extends State<LeaderboardRow> with SingleTickerProviderStateMixin {
   late AnimationController _highlightController;
   late Animation<Color?> _highlightAnimation;
 
@@ -49,7 +51,7 @@ class _StandingsRowState extends State<StandingsRow> with SingleTickerProviderSt
   }
 
   @override
-  void didUpdateWidget(StandingsRow oldWidget) {
+  void didUpdateWidget(LeaderboardRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_statsChanged(oldWidget.stats, widget.stats)) {
       _triggerHighlight();
@@ -113,18 +115,38 @@ class _StandingsRowState extends State<StandingsRow> with SingleTickerProviderSt
           // 2. Team Name & Logo (180)
           _buildTeamCell(theme),
 
-          // 3. Stats Cells
+          // 3. Core Stats (Always Visible)
           _buildAnimatedStatCell(widget.stats.played, width: 36),
           _buildAnimatedStatCell(widget.stats.wins, width: 32),
           _buildAnimatedStatCell(widget.stats.draws, width: 32),
           _buildAnimatedStatCell(widget.stats.losses, width: 32),
-          _buildAnimatedStatCell(widget.stats.goalsFor, width: 38),
-          _buildAnimatedStatCell(widget.stats.goalsAgainst, width: 38),
-          _buildAnimatedStatCell(widget.stats.goalDifference, width: 44, isGd: true),
+
+          // 4. Extra Stats (Animated sliding width and fading opacity)
+          AnimatedCell(
+            targetWidth: 38,
+            isVisible: !widget.isShortView,
+            child: _buildAnimatedStatCell(widget.stats.goalsFor, width: 38),
+          ),
+          AnimatedCell(
+            targetWidth: 38,
+            isVisible: !widget.isShortView,
+            child: _buildAnimatedStatCell(widget.stats.goalsAgainst, width: 38),
+          ),
+          AnimatedCell(
+            targetWidth: 44,
+            isVisible: !widget.isShortView,
+            child: _buildAnimatedStatCell(widget.stats.goalDifference, width: 44, isGd: true),
+          ),
+
+          // 5. Points (Always Visible)
           _buildAnimatedPointsCell(widget.stats.points, theme, width: 42),
 
-          // 4. Form (90)
-          _buildFormCell(),
+          // 6. Form (Animated)
+          AnimatedCell(
+            targetWidth: 90,
+            isVisible: !widget.isShortView,
+            child: _buildFormCell(),
+          ),
         ],
       ),
     );
@@ -153,14 +175,12 @@ class _StandingsRowState extends State<StandingsRow> with SingleTickerProviderSt
     Widget arrowIndicator = const SizedBox(width: 8);
     if (widget.previousRank != null) {
       if (widget.previousRank! > widget.rank) {
-        // Moved up
         arrowIndicator = const Icon(
           Icons.arrow_drop_up_rounded,
           color: Colors.greenAccent,
           size: 16,
         );
       } else if (widget.previousRank! < widget.rank) {
-        // Moved down
         arrowIndicator = const Icon(
           Icons.arrow_drop_down_rounded,
           color: Colors.redAccent,
@@ -339,6 +359,54 @@ class _StandingsRowState extends State<StandingsRow> with SingleTickerProviderSt
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+/// A cell that animates its width smoothly from 0 to targetWidth,
+/// and clips and fades out its content.
+class AnimatedCell extends StatelessWidget {
+  final double targetWidth;
+  final bool isVisible;
+  final Widget child;
+  final Duration duration;
+  final double height;
+
+  const AnimatedCell({
+    super.key,
+    required this.targetWidth,
+    required this.isVisible,
+    required this.child,
+    this.duration = const Duration(milliseconds: 300),
+    this.height = 48.0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: duration,
+      curve: Curves.easeInOut,
+      width: isVisible ? targetWidth : 0.0,
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(),
+      child: AnimatedOpacity(
+        duration: duration,
+        opacity: isVisible ? 1.0 : 0.0,
+        curve: Curves.easeInOut,
+        child: OverflowBox(
+          minWidth: 0.0,
+          maxWidth: targetWidth,
+          minHeight: 0.0,
+          maxHeight: height,
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: targetWidth,
+            height: height,
+            child: child,
+          ),
+        ),
       ),
     );
   }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/player.dart';
 import '../logic/tournament_logic.dart';
 import 'match_list_screen.dart';
-import 'logo_search_screen.dart';
 import '../widgets/team_logo_widget.dart';
 
 class CreateTournamentScreen extends StatefulWidget {
@@ -22,6 +22,27 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _teamFormKey = GlobalKey<FormState>();
   TournamentFormat _selectedFormat = TournamentFormat.knockout;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _importLogo() async {
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        setState(() {
+          _selectedLogoPath = image.path;
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to import logo: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -105,20 +126,73 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     });
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  bool get _isTournamentConfigValid {
+    if (_selectedFormat == TournamentFormat.knockout) {
+      return _teams.length >= 4 && _teams.length % 2 == 0;
+    } else {
+      return _teams.length >= 3;
+    }
+  }
+
+  Widget _buildWarningBox(ThemeData theme, String message) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.red.withAlpha((255 * 0.15).toInt()),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.red.withAlpha((255 * 0.3).toInt()),
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.red.shade400, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: Colors.red.shade300,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _startTournament() {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    if (_teams.length < 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please add at least 3 teams to start.'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
+    if (_selectedFormat == TournamentFormat.knockout) {
+      if (_teams.length < 4) {
+        _showError("Knockout requires at least 4 teams");
+        return;
+      }
+      if (_teams.length.isOdd) {
+        _showError("Knockout tournaments require an even number of teams");
+        return;
+      }
+    } else {
+      if (_teams.length < 3) {
+        _showError('Please add at least 3 teams to start.');
+        return;
+      }
     }
 
     final tournamentName = _tournamentNameController.text.trim();
@@ -273,19 +347,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                               Column(
                                 children: [
                                   InkWell(
-                                    onTap: () async {
-                                      final result = await Navigator.push<String>(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => const LogoSearchScreen(),
-                                        ),
-                                      );
-                                      if (result != null) {
-                                        setState(() {
-                                          _selectedLogoPath = result;
-                                        });
-                                      }
-                                    },
+                                    onTap: _importLogo,
                                     borderRadius: BorderRadius.circular(32),
                                     child: Stack(
                                       alignment: Alignment.bottomRight,
@@ -322,13 +384,21 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  const Text(
-                                    'Logo Picker',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.orange,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.5,
+                                  TextButton(
+                                    onPressed: _importLogo,
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: const Size(0, 0),
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text(
+                                      'Import Logo',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.orange,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -522,38 +592,22 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_teams.length < 3) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withAlpha((255 * 0.15).toInt()),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.red.withAlpha((255 * 0.3).toInt()),
-                            width: 1.0,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.red.shade400, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Minimum 3 teams required to start',
-                                style: TextStyle(
-                                  color: Colors.red.shade300,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                    if (_selectedFormat == TournamentFormat.knockout) ...[
+                      if (_teams.length < 4) ...[
+                        _buildWarningBox(theme, 'Knockout requires at least 4 teams'),
+                        const SizedBox(height: 12),
+                      ] else if (_teams.length.isOdd) ...[
+                        _buildWarningBox(theme, 'Knockout tournaments require an even number of teams'),
+                        const SizedBox(height: 12),
+                      ],
+                    ] else ...[
+                      if (_teams.length < 3) ...[
+                        _buildWarningBox(theme, 'Minimum 3 teams required to start'),
+                        const SizedBox(height: 12),
+                      ],
                     ],
                     ElevatedButton.icon(
-                      onPressed: _teams.length >= 3 ? _startTournament : null,
+                      onPressed: _isTournamentConfigValid ? _startTournament : null,
                       icon: const Icon(Icons.sports_rounded, size: 22),
                       label: const Text(
                         'Start Tournament',
@@ -564,10 +618,10 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                       ),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(56),
-                        backgroundColor: _teams.length >= 3
+                        backgroundColor: _isTournamentConfigValid
                             ? theme.colorScheme.primary
                             : theme.colorScheme.primary.withAlpha((255 * 0.3).toInt()),
-                        foregroundColor: _teams.length >= 3
+                        foregroundColor: _isTournamentConfigValid
                             ? theme.colorScheme.surface
                             : Colors.white30,
                       ),

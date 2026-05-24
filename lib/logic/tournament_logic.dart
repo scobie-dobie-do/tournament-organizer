@@ -3,6 +3,7 @@ import '../models/player.dart';
 import '../models/match.dart';
 import '../storage/database_service.dart';
 import 'standings_calculator.dart';
+import 'knockout_engine.dart';
 
 enum TournamentFormat {
   knockout,
@@ -89,25 +90,12 @@ class TournamentState {
     final shuffled = List<Player>.from(roundPlayers)..shuffle(Random());
     
     for (int i = 0; i < shuffled.length; i += 2) {
-      if (i + 1 < shuffled.length) {
-        matches.add(TournamentMatch(
-          id: 'ko_${currentRoundIndex}_${i ~/ 2}',
-          player1: shuffled[i],
-          player2: shuffled[i + 1],
-          roundIndex: currentRoundIndex,
-        ));
-      } else {
-        final byePlayer = shuffled[i];
-        matches.add(TournamentMatch(
-          id: 'ko_${currentRoundIndex}_${i ~/ 2}_bye',
-          player1: byePlayer,
-          player2: null,
-          winner: byePlayer,
-          isBye: true,
-          roundIndex: currentRoundIndex,
-          isCompleted: true,
-        ));
-      }
+      matches.add(TournamentMatch(
+        id: 'ko_${currentRoundIndex}_${i ~/ 2}',
+        player1: shuffled[i],
+        player2: shuffled[i + 1],
+        roundIndex: currentRoundIndex,
+      ));
     }
     _checkTournamentStatus();
   }
@@ -198,14 +186,7 @@ class TournamentState {
 
   void _checkTournamentStatus() {
     if (format == TournamentFormat.knockout) {
-      final currentRoundMatches = matches.where((m) => m.roundIndex == currentRoundIndex).toList();
-      final allPlayed = currentRoundMatches.every((m) => m.isCompleted);
-      
-      if (allPlayed) {
-        if (currentRoundMatches.length == 1) {
-          isCompleted = true;
-        }
-      }
+      isCompleted = KnockoutEngine.isCompleted(matches, currentRoundIndex);
     } else {
       isCompleted = matches.every((m) => m.isCompleted);
     }
@@ -213,48 +194,31 @@ class TournamentState {
 
   bool get canAdvanceKnockout {
     if (format != TournamentFormat.knockout || isCompleted) return false;
-    final currentRoundMatches = matches.where((m) => m.roundIndex == currentRoundIndex).toList();
-    return currentRoundMatches.isNotEmpty && currentRoundMatches.every((m) => m.isCompleted && m.winner != null);
+    return KnockoutEngine.canAdvance(matches, currentRoundIndex);
   }
 
   void advanceKnockoutRound() {
     if (!canAdvanceKnockout) return;
 
-    final currentRoundMatches = matches.where((m) => m.roundIndex == currentRoundIndex).toList();
-    final winners = currentRoundMatches.map((m) => m.winner!).toList();
+    try {
+      final nextMatches = KnockoutEngine.generateNextRound(
+        matches: matches,
+        currentRoundIndex: currentRoundIndex,
+      );
 
-    if (winners.length <= 1) {
-      isCompleted = true;
-      DatabaseService().saveTournament(this);
-      return;
-    }
-
-    currentRoundIndex++;
-    
-    for (int i = 0; i < winners.length; i += 2) {
-      if (i + 1 < winners.length) {
-        matches.add(TournamentMatch(
-          id: 'ko_${currentRoundIndex}_${i ~/ 2}',
-          player1: winners[i],
-          player2: winners[i + 1],
-          roundIndex: currentRoundIndex,
-        ));
+      if (nextMatches.isEmpty) {
+        isCompleted = true;
       } else {
-        final byePlayer = winners[i];
-        matches.add(TournamentMatch(
-          id: 'ko_${currentRoundIndex}_${i ~/ 2}_bye',
-          player1: byePlayer,
-          player2: null,
-          winner: byePlayer,
-          isBye: true,
-          roundIndex: currentRoundIndex,
-          isCompleted: true,
-        ));
+        matches.addAll(nextMatches);
+        currentRoundIndex++;
       }
+      
+      _checkTournamentStatus();
+      DatabaseService().saveTournament(this);
+    } catch (e) {
+      // Safety fallback
+      print("Error advancing knockout round: $e");
     }
-    
-    _checkTournamentStatus();
-    DatabaseService().saveTournament(this);
   }
 
   List<TeamStats> getLeaderboard() {
