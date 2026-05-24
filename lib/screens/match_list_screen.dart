@@ -23,6 +23,7 @@ class MatchListScreen extends StatefulWidget {
 
 class _MatchListScreenState extends State<MatchListScreen> {
   String _filter = 'All';
+  bool _isBracketView = true;
 
   @override
   void initState() {
@@ -150,7 +151,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
     final theme = Theme.of(context);
     final champion = _getChampion();
 
-    return Scaffold(
+    Widget content = Scaffold(
       appBar: AppBar(
         title: Text(
           state.format == TournamentFormat.knockout
@@ -158,6 +159,16 @@ class _MatchListScreenState extends State<MatchListScreen> {
               : 'League Matches',
         ),
         actions: [
+          if (state.format == TournamentFormat.knockout)
+            IconButton(
+              icon: Icon(_isBracketView ? Icons.list_rounded : Icons.account_tree_outlined),
+              tooltip: _isBracketView ? 'Switch to List View' : 'Switch to Bracket View',
+              onPressed: () {
+                setState(() {
+                  _isBracketView = !_isBracketView;
+                });
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.emoji_events_rounded),
             tooltip: 'Standings',
@@ -172,6 +183,22 @@ class _MatchListScreenState extends State<MatchListScreen> {
           ),
           const SizedBox(width: 4),
         ],
+        bottom: (state.format == TournamentFormat.knockout && !_isBracketView)
+            ? TabBar(
+                isScrollable: state.currentRoundIndex > 4,
+                indicatorColor: theme.colorScheme.primary,
+                labelColor: theme.colorScheme.primary,
+                unselectedLabelColor: Colors.grey.shade500,
+                labelStyle: const TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 13),
+                unselectedLabelStyle: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13),
+                tabs: List.generate(
+                  state.currentRoundIndex,
+                  (i) => Tab(text: 'Round ${i + 1}'),
+                ),
+              )
+            : null,
       ),
       body: SafeArea(
         child: Column(
@@ -186,10 +213,22 @@ class _MatchListScreenState extends State<MatchListScreen> {
             // ── Match list ───────────────────────────────────────────
             Expanded(
               child: state.format == TournamentFormat.knockout
-                  ? KnockoutBracketView(
-                      tournamentState: state,
-                      onMatchTap: _openMatchDetail,
-                    )
+                  ? (_isBracketView
+                      ? KnockoutBracketView(
+                          tournamentState: state,
+                          onMatchTap: _openMatchDetail,
+                        )
+                      : TabBarView(
+                          children: List.generate(
+                            state.currentRoundIndex,
+                            (roundIdx) {
+                              final roundMatches = state.matches
+                                  .where((m) => m.roundIndex == roundIdx + 1)
+                                  .toList();
+                              return _buildList(roundMatches, theme);
+                            },
+                          ),
+                        ))
                   : _buildList(
                       _applyFilter(state.matches),
                       theme,
@@ -204,6 +243,17 @@ class _MatchListScreenState extends State<MatchListScreen> {
         ),
       ),
     );
+
+    if (state.format == TournamentFormat.knockout && !_isBracketView) {
+      content = DefaultTabController(
+        key: ValueKey('ko_tabs_${state.currentRoundIndex}'),
+        length: state.currentRoundIndex,
+        initialIndex: state.currentRoundIndex - 1,
+        child: content,
+      );
+    }
+
+    return content;
   }
 
   // ─── Section builders ─────────────────────────────────────────────────────
