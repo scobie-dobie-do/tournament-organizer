@@ -5,6 +5,7 @@ import '../logic/tournament_logic.dart';
 import 'standings_screen.dart';
 import 'match_detail_screen.dart';
 import '../widgets/match_card.dart';
+import '../widgets/knockout_bracket_view.dart';
 
 /// Match List Screen — preview-only list of matches for a tournament.
 /// Tapping a match navigates to [MatchDetailScreen] for score editing.
@@ -149,7 +150,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
     final theme = Theme.of(context);
     final champion = _getChampion();
 
-    Widget content = Scaffold(
+    return Scaffold(
       appBar: AppBar(
         title: Text(
           state.format == TournamentFormat.knockout
@@ -171,22 +172,6 @@ class _MatchListScreenState extends State<MatchListScreen> {
           ),
           const SizedBox(width: 4),
         ],
-        bottom: state.format == TournamentFormat.knockout
-            ? TabBar(
-                isScrollable: state.currentRoundIndex > 4,
-                indicatorColor: theme.colorScheme.primary,
-                labelColor: theme.colorScheme.primary,
-                unselectedLabelColor: Colors.grey.shade500,
-                labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w900, fontSize: 13),
-                unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13),
-                tabs: List.generate(
-                  state.currentRoundIndex,
-                  (i) => Tab(text: 'Round ${i + 1}'),
-                ),
-              )
-            : null,
       ),
       body: SafeArea(
         child: Column(
@@ -201,16 +186,9 @@ class _MatchListScreenState extends State<MatchListScreen> {
             // ── Match list ───────────────────────────────────────────
             Expanded(
               child: state.format == TournamentFormat.knockout
-                  ? TabBarView(
-                      children: List.generate(
-                        state.currentRoundIndex,
-                        (roundIdx) {
-                          final roundMatches = state.matches
-                              .where((m) => m.roundIndex == roundIdx + 1)
-                              .toList();
-                          return _buildList(roundMatches, theme);
-                        },
-                      ),
+                  ? KnockoutBracketView(
+                      tournamentState: state,
+                      onMatchTap: _openMatchDetail,
                     )
                   : _buildList(
                       _applyFilter(state.matches),
@@ -226,17 +204,6 @@ class _MatchListScreenState extends State<MatchListScreen> {
         ),
       ),
     );
-
-    if (state.format == TournamentFormat.knockout) {
-      content = DefaultTabController(
-        key: ValueKey('ko_tabs_${state.currentRoundIndex}'),
-        length: state.currentRoundIndex,
-        initialIndex: state.currentRoundIndex - 1,
-        child: content,
-      );
-    }
-
-    return content;
   }
 
   // ─── Section builders ─────────────────────────────────────────────────────

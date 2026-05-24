@@ -16,9 +16,10 @@ class TournamentOrganizerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const deepDarkBackground = Color(0xFF0F1412);
-    const greenAccent = Color(0xFF00C853);
-    const darkGrayCard = Color(0xFF1C1F1D);
+    const deepDarkBackground = Color(0xFF0A1210); // Deep Emerald Grey Background
+    const greenAccent = Color(0xFF00CC66); // Viridian Accent Green
+    const mintHighlight = Color(0xFFCCFFDD); // Mint highlight
+    const darkGrayCard = Color(0xFF121E1B); // Green-tinted dark gray card
 
     return MaterialApp(
       title: 'Tournament Organizer',
@@ -33,10 +34,10 @@ class TournamentOrganizerApp extends StatelessWidget {
           seedColor: greenAccent,
           brightness: Brightness.dark,
           primary: greenAccent,
-          secondary: const Color(0xFF00E676),
+          secondary: mintHighlight,
           surface: deepDarkBackground,
           surfaceContainerLow: darkGrayCard,
-          surfaceContainerHighest: const Color(0xFF2C322E),
+          surfaceContainerHighest: const Color(0xFF1B2F2A),
         ),
         scaffoldBackgroundColor: deepDarkBackground,
         appBarTheme: const AppBarTheme(

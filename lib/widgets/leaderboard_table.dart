@@ -68,6 +68,7 @@ class LeaderboardTable extends StatelessWidget {
                       form: formList,
                       isEvenRow: index.isEven,
                       isShortView: isShortView,
+                      totalTeams: standings.length,
                     ),
                   );
                 }),
@@ -88,7 +89,7 @@ class LeaderboardTable extends StatelessWidget {
       child: Row(
         children: [
           _buildHeaderCell('#', width: 36),
-          _buildHeaderCell('Team', width: 180, align: TextAlign.left),
+          _buildHeaderCell('Team', width: 176, align: TextAlign.left),
           _buildHeaderCell('MP', width: 36),
           _buildHeaderCell('W', width: 32),
           _buildHeaderCell('D', width: 32),

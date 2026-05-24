@@ -9,6 +9,7 @@ class LeaderboardRow extends StatefulWidget {
   final List<String> form;
   final bool isEvenRow;
   final bool isShortView;
+  final int totalTeams;
 
   const LeaderboardRow({
     super.key,
@@ -18,6 +19,7 @@ class LeaderboardRow extends StatefulWidget {
     required this.form,
     required this.isEvenRow,
     required this.isShortView,
+    required this.totalTeams,
   });
 
   @override
@@ -87,75 +89,130 @@ class _LeaderboardRowState extends State<LeaderboardRow> with SingleTickerProvid
         ? Colors.transparent
         : theme.colorScheme.surfaceContainerLow.withAlpha((255 * 0.3).toInt());
 
+    final isPromotion = widget.rank <= 3;
+    final isRelegation = widget.totalTeams >= 6 && widget.rank > widget.totalTeams - 3;
+
+    BoxDecoration boxDecoration;
+    EdgeInsets margin = EdgeInsets.zero;
+
+    if (isPromotion) {
+      margin = const EdgeInsets.symmetric(vertical: 3.0);
+      boxDecoration = BoxDecoration(
+        color: widget.isEvenRow
+            ? theme.colorScheme.surfaceContainerLow.withAlpha((255 * 0.15).toInt())
+            : theme.colorScheme.surfaceContainerLow.withAlpha((255 * 0.35).toInt()),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.primary.withOpacity(widget.rank == 1 ? 0.45 : 0.25),
+          width: 1.2,
+        ),
+        boxShadow: widget.rank == 1
+            ? [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withOpacity(0.12),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                )
+              ]
+            : null,
+      );
+    } else {
+      boxDecoration = BoxDecoration(
+        color: baseBgColor,
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.white.withAlpha((255 * 0.05).toInt()),
+            width: 1.0,
+          ),
+        ),
+      );
+    }
+
     return AnimatedBuilder(
       animation: _highlightAnimation,
       builder: (context, child) {
         final highlightColor = _highlightAnimation.value;
-        return Container(
+        final decoration = highlightColor != null && highlightColor != Colors.transparent
+            ? boxDecoration.copyWith(
+                color: Color.alphaBlend(highlightColor, boxDecoration.color ?? Colors.transparent),
+              )
+            : boxDecoration;
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
           height: 48,
-          decoration: BoxDecoration(
-            color: highlightColor != null && highlightColor != Colors.transparent
-                ? Color.alphaBlend(highlightColor, baseBgColor)
-                : baseBgColor,
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withAlpha((255 * 0.05).toInt()),
-                width: 1.0,
-              ),
-            ),
-          ),
+          margin: margin,
+          decoration: decoration,
           child: child,
         );
       },
-      child: Row(
+      child: Stack(
+        alignment: Alignment.centerLeft,
         children: [
-          // 1. Rank & Change Arrow (36)
-          _buildRankCell(),
+          Row(
+            children: [
+              // 1. Rank & Change Arrow (36)
+              _buildRankCell(),
 
-          // 2. Team Name & Logo (180)
-          _buildTeamCell(theme),
+              // 2. Team Name & Logo (180)
+              _buildTeamCell(theme),
 
-          // 3. Core Stats (Always Visible)
-          _buildAnimatedStatCell(widget.stats.played, width: 36),
-          _buildAnimatedStatCell(widget.stats.wins, width: 32),
-          _buildAnimatedStatCell(widget.stats.draws, width: 32),
-          _buildAnimatedStatCell(widget.stats.losses, width: 32),
+              // 3. Core Stats (Always Visible)
+              _buildAnimatedStatCell(widget.stats.played, width: 36),
+              _buildAnimatedStatCell(widget.stats.wins, width: 32),
+              _buildAnimatedStatCell(widget.stats.draws, width: 32),
+              _buildAnimatedStatCell(widget.stats.losses, width: 32),
 
-          // 4. Extra Stats (Animated sliding width and fading opacity)
-          AnimatedCell(
-            targetWidth: 38,
-            isVisible: !widget.isShortView,
-            child: _buildAnimatedStatCell(widget.stats.goalsFor, width: 38),
+              // 4. Extra Stats (Animated sliding width and fading opacity)
+              AnimatedCell(
+                targetWidth: 38,
+                isVisible: !widget.isShortView,
+                child: _buildAnimatedStatCell(widget.stats.goalsFor, width: 38),
+              ),
+              AnimatedCell(
+                targetWidth: 38,
+                isVisible: !widget.isShortView,
+                child: _buildAnimatedStatCell(widget.stats.goalsAgainst, width: 38),
+              ),
+              AnimatedCell(
+                targetWidth: 44,
+                isVisible: !widget.isShortView,
+                child: _buildAnimatedStatCell(widget.stats.goalDifference, width: 44, isGd: true),
+              ),
+
+              // 5. Points (Always Visible)
+              _buildAnimatedPointsCell(widget.stats.points, theme, width: 42),
+
+              // 6. Form (Animated)
+              AnimatedCell(
+                targetWidth: 90,
+                isVisible: !widget.isShortView,
+                child: _buildFormCell(),
+              ),
+            ],
           ),
-          AnimatedCell(
-            targetWidth: 38,
-            isVisible: !widget.isShortView,
-            child: _buildAnimatedStatCell(widget.stats.goalsAgainst, width: 38),
-          ),
-          AnimatedCell(
-            targetWidth: 44,
-            isVisible: !widget.isShortView,
-            child: _buildAnimatedStatCell(widget.stats.goalDifference, width: 44, isGd: true),
-          ),
-
-          // 5. Points (Always Visible)
-          _buildAnimatedPointsCell(widget.stats.points, theme, width: 42),
-
-          // 6. Form (Animated)
-          AnimatedCell(
-            targetWidth: 90,
-            isVisible: !widget.isShortView,
-            child: _buildFormCell(),
-          ),
+          if (isPromotion || isRelegation)
+            Positioned(
+              left: 4,
+              child: Container(
+                width: 4,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: isPromotion ? theme.colorScheme.primary : const Color(0xFFE54B4B),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildRankCell() {
+    final theme = Theme.of(context);
     Widget rankIconOrText;
     if (widget.rank == 1) {
-      rankIconOrText = const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 16);
+      rankIconOrText = Icon(Icons.workspace_premium_rounded, color: theme.colorScheme.primary, size: 16);
     } else if (widget.rank == 2) {
       rankIconOrText = Icon(Icons.workspace_premium_rounded, color: Colors.grey.shade400, size: 16);
     } else if (widget.rank == 3) {
@@ -203,7 +260,7 @@ class _LeaderboardRowState extends State<LeaderboardRow> with SingleTickerProvid
 
   Widget _buildTeamCell(ThemeData theme) {
     return SizedBox(
-      width: 180,
+      width: 176,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4.0),
         child: Row(
@@ -325,24 +382,24 @@ class _LeaderboardRowState extends State<LeaderboardRow> with SingleTickerProvid
 
           switch (result) {
             case 'W':
-              circleColor = Colors.green.shade700;
+              circleColor = const Color(0xFF00CC66); // Viridian Green
               letter = 'W';
               break;
             case 'L':
-              circleColor = Colors.red.shade700;
+              circleColor = const Color(0xFFE54B4B); // Crimson Red
               letter = 'L';
               break;
             case 'D':
             default:
-              circleColor = Colors.grey.shade700;
+              circleColor = const Color(0xFFE5A93C); // Orange/Yellow
               letter = 'D';
               break;
           }
 
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 2.0),
-            width: 14,
-            height: 14,
+            width: 16,
+            height: 16,
             decoration: BoxDecoration(
               color: circleColor,
               shape: BoxShape.circle,
@@ -351,7 +408,7 @@ class _LeaderboardRowState extends State<LeaderboardRow> with SingleTickerProvid
               child: Text(
                 letter,
                 style: TextStyle(
-                  fontSize: 8,
+                  fontSize: 9,
                   fontWeight: FontWeight.w900,
                   color: textColor,
                 ),
