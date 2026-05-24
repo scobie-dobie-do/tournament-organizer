@@ -82,7 +82,7 @@ class StandingsCalculator {
       );
     }).toList();
 
-    // Sort standings by: Points -> Goal Difference -> Goals For -> Alphabetical (team name)
+    // Sort standings by: Points -> Goal Difference -> Goals For -> Head-to-Head -> Wins -> Alphabetical
     list.sort((a, b) {
       if (b.points != a.points) {
         return b.points.compareTo(a.points);
@@ -93,6 +93,68 @@ class StandingsCalculator {
       if (b.goalsFor != a.goalsFor) {
         return b.goalsFor.compareTo(a.goalsFor);
       }
+
+      // Head-to-Head (H2H) tie-breaker
+      final h2hMatches = matches.where((m) {
+        if (!m.isCompleted || m.isBye) return false;
+        final id1 = m.player1.id;
+        final id2 = m.player2?.id;
+        if (id2 == null) return false;
+        return (id1 == a.team.id && id2 == b.team.id) || (id1 == b.team.id && id2 == a.team.id);
+      }).toList();
+
+      if (h2hMatches.isNotEmpty) {
+        int aH2hPoints = 0;
+        int bH2hPoints = 0;
+        int aH2hGoals = 0;
+        int bH2hGoals = 0;
+
+        for (var m in h2hMatches) {
+          final hg = m.homeGoals ?? 0;
+          final ag = m.awayGoals ?? 0;
+          final isHomeA = m.player1.id == a.team.id;
+
+          if (isHomeA) {
+            aH2hGoals += hg;
+            bH2hGoals += ag;
+            if (hg > ag) {
+              aH2hPoints += 3;
+            } else if (hg < ag) {
+              bH2hPoints += 3;
+            } else {
+              aH2hPoints += 1;
+              bH2hPoints += 1;
+            }
+          } else {
+            aH2hGoals += ag;
+            bH2hGoals += hg;
+            if (ag > hg) {
+              aH2hPoints += 3;
+            } else if (ag < hg) {
+              bH2hPoints += 3;
+            } else {
+              aH2hPoints += 1;
+              bH2hPoints += 1;
+            }
+          }
+        }
+
+        if (bH2hPoints != aH2hPoints) {
+          return bH2hPoints.compareTo(aH2hPoints);
+        }
+
+        final aH2hGd = aH2hGoals - bH2hGoals;
+        final bH2hGd = bH2hGoals - aH2hGoals;
+        if (bH2hGd != aH2hGd) {
+          return bH2hGd.compareTo(aH2hGd);
+        }
+      }
+
+      // Wins tie-breaker
+      if (b.wins != a.wins) {
+        return b.wins.compareTo(a.wins);
+      }
+
       return a.team.teamName.compareTo(b.team.teamName);
     });
 

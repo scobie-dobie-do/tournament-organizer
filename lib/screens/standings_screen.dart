@@ -1,7 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../logic/tournament_logic.dart';
-import '../logic/standings_calculator.dart';
 import '../widgets/leaderboard_table.dart';
 import '../widgets/team_logo_widget.dart';
 
@@ -21,6 +20,8 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
   late List<TeamStats> _currentStandings;
   final Map<String, int> _previousRankings = {}; // teamId -> rank (1-indexed)
   bool _isShortView = true;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchText = '';
 
   // Confetti Particle Effect State
   late AnimationController _confettiController;
@@ -32,6 +33,14 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
     super.initState();
     _currentStandings = widget.tournamentState.getLeaderboard();
     _saveRankings();
+
+    _searchController.addListener(() {
+      if (mounted) {
+        setState(() {
+          _searchText = _searchController.text.trim().toLowerCase();
+        });
+      }
+    });
 
     _confettiController = AnimationController(
       vsync: this,
@@ -59,7 +68,6 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
     super.didUpdateWidget(oldWidget);
     final newStandings = widget.tournamentState.getLeaderboard();
 
-    // Check if team 1 changed (to trigger confetti)
     if (_currentStandings.isNotEmpty && newStandings.isNotEmpty) {
       final oldLeaderId = _currentStandings.first.team.id;
       final newLeaderId = newStandings.first.team.id;
@@ -68,7 +76,6 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
       }
     }
 
-    // Save rankings from the current list before we replace it
     _saveRankings();
     
     setState(() {
@@ -88,10 +95,9 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
       Colors.purpleAccent
     ];
     
-    // Spawn 80 particles
     for (int i = 0; i < 80; i++) {
       _confettiParticles.add(_ConfettiParticle(
-        x: 0, // Will be set relative to canvas width on paint
+        x: 0,
         y: -20 - _random.nextDouble() * 50,
         vx: (_random.nextDouble() - 0.5) * 5,
         vy: 2 + _random.nextDouble() * 4,
@@ -108,13 +114,65 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
   @override
   void dispose() {
     _confettiController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  List<TeamStats> get _filteredStandings {
+    if (_searchText.isEmpty) return _currentStandings;
+    return _currentStandings
+        .where((st) => st.team.teamName.toLowerCase().contains(_searchText))
+        .toList();
+  }
+
+  Widget _buildSkeletonLoader(ThemeData theme) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 6,
+      itemBuilder: (context, idx) {
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.25, end: 0.75),
+          duration: Duration(milliseconds: 800 + idx * 100),
+          builder: (context, opacity, child) {
+            return Opacity(
+              opacity: opacity,
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                height: 48,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withAlpha((255 * 0.04).toInt())),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 12),
+                    Container(width: 20, height: 14, decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(4))),
+                    const SizedBox(width: 12),
+                    Container(width: 26, height: 26, decoration: BoxDecoration(color: Colors.grey.shade800, shape: BoxShape.circle)),
+                    const SizedBox(width: 12),
+                    Container(width: 90, height: 14, decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(4))),
+                    const Spacer(),
+                    Container(width: 24, height: 14, decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(4))),
+                    const SizedBox(width: 20),
+                    Container(width: 28, height: 14, decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(4))),
+                    const SizedBox(width: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const rowHeight = 48.0;
+    final filtered = _filteredStandings;
 
     return Scaffold(
       appBar: AppBar(
@@ -126,44 +184,76 @@ class _StandingsScreenState extends State<StandingsScreen> with TickerProviderSt
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                 // 1. Visual Podium (if at least 2 players exist)
-                 if (_currentStandings.length >= 2)
+                 // 1. Visual Podium (shown only if search query is empty)
+                 if (_searchText.isEmpty && _currentStandings.length >= 2)
                    Padding(
                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                      child: _buildVisualPodium(_currentStandings, theme),
                    ),
 
-                 // 1b. Mode Toggle Switch
+                 // Search Bar Widget
+                 Padding(
+                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                   child: TextFormField(
+                     controller: _searchController,
+                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                     decoration: InputDecoration(
+                       labelText: 'Search Team...',
+                       hintText: 'e.g. Tigers',
+                       prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                       suffixIcon: _searchController.text.isNotEmpty
+                           ? IconButton(
+                               icon: const Icon(Icons.clear_rounded, size: 18),
+                               onPressed: () {
+                                 _searchController.clear();
+                               },
+                             )
+                           : null,
+                       contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                     ),
+                   ),
+                 ),
+
+                 // Mode Toggle Switch
                  _buildToggleBar(theme),
 
                  // 2. Table Area
                  Expanded(
                    child: _currentStandings.isEmpty
-                       ? Center(
-                           child: Text(
-                             'No statistics available.',
-                             style: TextStyle(color: Colors.grey.shade500),
-                           ),
-                         )
-                       : SingleChildScrollView(
-                           physics: const BouncingScrollPhysics(),
-                           child: Padding(
-                             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                             child: Card(
-                               margin: EdgeInsets.zero,
+                       ? _buildSkeletonLoader(theme)
+                       : (filtered.isEmpty
+                           ? Center(
+                               child: Column(
+                                 mainAxisAlignment: MainAxisAlignment.center,
+                                 children: [
+                                   Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade600),
+                                   const SizedBox(height: 12),
+                                   Text(
+                                     "No teams match '$_searchText'",
+                                     style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold),
+                                   ),
+                                 ],
+                               ),
+                             )
+                           : SingleChildScrollView(
+                               physics: const BouncingScrollPhysics(),
                                child: Padding(
-                                 padding: const EdgeInsets.all(8.0),
-                                 child: LeaderboardTable(
-                                   standings: _currentStandings,
-                                   matches: widget.tournamentState.matches,
-                                   previousRankings: _previousRankings,
-                                   isShortView: _isShortView,
-                                   rowHeight: rowHeight,
+                                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                                 child: Card(
+                                   margin: EdgeInsets.zero,
+                                   child: Padding(
+                                     padding: const EdgeInsets.all(8.0),
+                                     child: LeaderboardTable(
+                                       standings: filtered,
+                                       matches: widget.tournamentState.matches,
+                                       previousRankings: _previousRankings,
+                                       isShortView: _isShortView,
+                                       rowHeight: rowHeight,
+                                     ),
+                                   ),
                                  ),
                                ),
-                             ),
-                           ),
-                         ),
+                             )),
                  ),
                 const SizedBox(height: 16),
               ],

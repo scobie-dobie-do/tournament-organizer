@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/match.dart';
 import '../models/player.dart';
 import '../logic/tournament_logic.dart';
+import '../logic/knockout_engine.dart';
 import 'team_logo_widget.dart';
 
 class VirtualMatchNode {
@@ -98,14 +99,25 @@ class KnockoutBracketView extends StatelessWidget {
       return _ResolvedTeam(teamName: 'TBD', isTbd: true);
     }
 
-    final parentMatches = allMatches.where((m) => m.roundIndex == parentNode.roundIndex).toList();
-    if (parentNode.matchIndex < parentMatches.length) {
-      final actualMatch = parentMatches[parentNode.matchIndex];
-      if (actualMatch.isCompleted && actualMatch.winner != null) {
+    // A matchup in the parent node can consist of multiple legs
+    final parentGroupId = 'ko_${parentNode.roundIndex}_${parentNode.matchIndex}';
+    final parentMatches = allMatches.where((m) => m.roundIndex == parentNode.roundIndex && m.aggregateGroupId == parentGroupId).toList();
+    
+    // Fallback if legacy match
+    final legacyMatches = parentMatches.isEmpty 
+        ? allMatches.where((m) => m.roundIndex == parentNode.roundIndex).toList()
+        : parentMatches;
+
+    if (parentMatches.isNotEmpty || (parentNode.matchIndex < legacyMatches.length)) {
+      final matchesGroup = parentMatches.isNotEmpty ? parentMatches : [legacyMatches[parentNode.matchIndex]];
+      final isCompleted = matchesGroup.every((m) => m.isCompleted);
+      final winner = KnockoutEngine.getWinnerOfMatchup(matchesGroup, tournamentState.awayGoalsRule);
+
+      if (isCompleted && winner != null) {
         return _ResolvedTeam(
-          teamName: actualMatch.winner!.teamName,
-          logoPath: actualMatch.winner!.logoPath,
-          player: actualMatch.winner,
+          teamName: winner.teamName,
+          logoPath: winner.logoPath,
+          player: winner,
         );
       } else {
         return _ResolvedTeam(
@@ -127,10 +139,10 @@ class KnockoutBracketView extends StatelessWidget {
     final theme = Theme.of(context);
 
     // Dimension Constants
-    const cardWidth = 190.0;
-    const cardHeight = 96.0;
-    const cardGap = 32.0;
-    const columnWidth = 250.0;
+    const cardWidth = 230.0;
+    const cardHeight = 100.0;
+    const cardGap = 36.0;
+    const columnWidth = 290.0;
     const colPaddingLeft = (columnWidth - cardWidth) / 2; // 30.0
 
     final virtualRounds = _buildVirtualBracket(tournamentState.players.length);
@@ -144,6 +156,10 @@ class KnockoutBracketView extends StatelessWidget {
       }
     }
     totalHeight += 24.0; // padding at the bottom
+
+    if (tournamentState.hasThirdPlaceMatch) {
+      totalHeight += cardHeight + 40.0;
+    }
     final totalWidth = virtualRounds.length * columnWidth;
 
     return Center(
@@ -176,9 +192,6 @@ class KnockoutBracketView extends StatelessWidget {
                 ...List.generate(virtualRounds.length, (colIdx) {
                   final roundNodes = virtualRounds[colIdx];
                   final roundIndex = colIdx + 1;
-                  final actualRoundMatches = tournamentState.matches
-                      .where((m) => m.roundIndex == roundIndex)
-                      .toList();
 
                   return Positioned(
                     left: colIdx * columnWidth,
@@ -186,25 +199,90 @@ class KnockoutBracketView extends StatelessWidget {
                     bottom: 0,
                     width: columnWidth,
                     child: Stack(
-                      children: roundNodes.map((node) {
-                        final bool hasMatch = node.matchIndex < actualRoundMatches.length;
-                        final TournamentMatch? actualMatch =
-                            hasMatch ? actualRoundMatches[node.matchIndex] : null;
+                      children: [
+                        ...roundNodes.map((node) {
+                          final matchupId = 'ko_${roundIndex}_${node.matchIndex}';
+                          final matchupMatches = tournamentState.matches
+                              .where((m) => m.roundIndex == roundIndex && m.aggregateGroupId == matchupId && !m.isThirdPlace)
+                              .toList();
 
-                        return Positioned(
-                          left: colPaddingLeft,
-                          top: node.centerY - cardHeight / 2,
-                          width: cardWidth,
-                          height: cardHeight,
-                          child: _buildMatchCard(
-                            context: context,
-                            theme: theme,
-                            node: node,
-                            actualMatch: actualMatch,
-                            roundIndex: roundIndex,
-                          ),
-                        );
-                      }).toList(),
+                          // Fallback to legacy single index if aggregateGroupId matches are empty
+                          final bool isLegacy = matchupMatches.isEmpty;
+                          final legacyRoundMatches = tournamentState.matches
+                              .where((m) => m.roundIndex == roundIndex && !m.isThirdPlace)
+                              .toList();
+                          final TournamentMatch? legacyMatch = (!isLegacy || node.matchIndex >= legacyRoundMatches.length)
+                              ? null
+                              : legacyRoundMatches[node.matchIndex];
+
+                          final List<TournamentMatch> actualMatchup = isLegacy
+                              ? (legacyMatch != null ? [legacyMatch] : [])
+                              : matchupMatches;
+
+                          return Positioned(
+                            left: colPaddingLeft,
+                            top: node.centerY - cardHeight / 2,
+                            width: cardWidth,
+                            height: cardHeight,
+                            child: _buildMatchCard(
+                              context: context,
+                              theme: theme,
+                              node: node,
+                              matchupMatches: actualMatchup,
+                              roundIndex: roundIndex,
+                            ),
+                          );
+                        }),
+
+                        // Render Third Place Match card under the Final card
+                        if (roundIndex == virtualRounds.length && tournamentState.hasThirdPlaceMatch) ...[
+                          (() {
+                            final finalNode = roundNodes.first;
+                            final tpMatches = tournamentState.matches
+                                .where((m) => m.roundIndex == roundIndex && m.isThirdPlace)
+                                .toList();
+
+                            return Positioned(
+                              left: colPaddingLeft,
+                              top: finalNode.centerY + cardHeight / 2 + 28,
+                              width: cardWidth,
+                              height: cardHeight + 20,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withAlpha((255 * 0.12).toInt()),
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                                    ),
+                                    child: const Text(
+                                      'THIRD PLACE MATCH',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.orange,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _buildMatchCard(
+                                      context: context,
+                                      theme: theme,
+                                      node: VirtualMatchNode(roundIndex: roundIndex, matchIndex: -1),
+                                      matchupMatches: tpMatches,
+                                      roundIndex: roundIndex,
+                                      isTPCard: true,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }())
+                        ]
+                      ],
                     ),
                   );
                 }),
@@ -221,40 +299,79 @@ class KnockoutBracketView extends StatelessWidget {
     required BuildContext context,
     required ThemeData theme,
     required VirtualMatchNode node,
-    required TournamentMatch? actualMatch,
+    required List<TournamentMatch> matchupMatches,
     required int roundIndex,
+    bool isTPCard = false,
   }) {
-    final bool isPlayable = actualMatch != null;
+    final bool isPlayable = matchupMatches.isNotEmpty;
     final bool isActiveRound = roundIndex == tournamentState.currentRoundIndex;
 
     // Resolve teams and scores
     final _ResolvedTeam team1;
     final _ResolvedTeam team2;
-    final String score1;
-    final String score2;
-    final bool isCompleted = actualMatch?.isCompleted ?? false;
-    final Player? winner = actualMatch?.winner;
 
-    if (actualMatch != null) {
+    int? t1Leg1, t1Leg2, t1Agg, t1Pens;
+    int? t2Leg1, t2Leg2, t2Agg, t2Pens;
+
+    final bool isCompleted = isPlayable && matchupMatches.every((m) => m.isCompleted);
+    final Player? winner = isPlayable
+        ? KnockoutEngine.getWinnerOfMatchup(matchupMatches, tournamentState.awayGoalsRule)
+        : null;
+
+    if (isPlayable) {
+      final m1 = matchupMatches.firstWhere((m) => m.legNumber == 1, orElse: () => matchupMatches.first);
+      final m2 = matchupMatches.firstWhere((m) => m.legNumber == 2, orElse: () => m1);
+      final p1 = m1.player1;
+      final p2 = m1.player2;
+
       team1 = _ResolvedTeam(
-        teamName: actualMatch.player1.teamName,
-        logoPath: actualMatch.player1.logoPath,
-        player: actualMatch.player1,
+        teamName: p1.teamName,
+        logoPath: p1.logoPath,
+        player: p1,
       );
+
       team2 = _ResolvedTeam(
-        teamName: actualMatch.player2?.teamName ?? 'TBD',
-        logoPath: actualMatch.player2?.logoPath,
-        player: actualMatch.player2,
-        isTbd: actualMatch.player2 == null,
+        teamName: p2?.teamName ?? 'TBD',
+        logoPath: p2?.logoPath,
+        player: p2,
+        isTbd: p2 == null,
       );
-      score1 = isCompleted ? '${actualMatch.homeGoals ?? 0}' : '';
-      score2 = isCompleted ? '${actualMatch.awayGoals ?? 0}' : '';
+
+      if (p2 != null) {
+        // Calculate scores dynamically based on team positions
+        t1Leg1 = m1.player1.id == p1.id ? m1.homeGoals : m1.awayGoals;
+        t2Leg1 = m1.player2?.id == p2.id ? m1.awayGoals : m1.homeGoals;
+
+        if (matchupMatches.length > 1) {
+          t1Leg2 = m2.player1.id == p1.id ? m2.homeGoals : m2.awayGoals;
+          t2Leg2 = m2.player2?.id == p2.id ? m2.awayGoals : m2.homeGoals;
+
+          if (t1Leg1 != null && t1Leg2 != null) {
+            t1Agg = t1Leg1 + t1Leg2;
+          }
+          if (t2Leg1 != null && t2Leg2 != null) {
+            t2Agg = t2Leg1 + t2Leg2;
+          }
+
+          // Penalties
+          final lastLeg = matchupMatches.reduce((curr, next) => curr.legNumber > next.legNumber ? curr : next);
+          if (lastLeg.isCompleted && lastLeg.homePenalties != null && lastLeg.awayPenalties != null) {
+            t1Pens = lastLeg.player1.id == p1.id ? lastLeg.homePenalties : lastLeg.awayPenalties;
+            t2Pens = lastLeg.player2?.id == p2.id ? lastLeg.awayPenalties : lastLeg.homePenalties;
+          }
+        } else {
+          t1Agg = m1.homeGoals;
+          t2Agg = m1.awayGoals;
+          if (m1.isCompleted && m1.homePenalties != null && m1.awayPenalties != null) {
+            t1Pens = m1.homePenalties;
+            t2Pens = m1.awayPenalties;
+          }
+        }
+      }
     } else {
       // Future placeholder card
       team1 = _resolveTeam(node.parent1, tournamentState.matches);
       team2 = _resolveTeam(node.parent2, tournamentState.matches);
-      score1 = '';
-      score2 = '';
     }
 
     final isT1Winner = isCompleted && winner != null && winner.id == team1.player?.id;
@@ -262,17 +379,17 @@ class KnockoutBracketView extends StatelessWidget {
 
     final border = Border.all(
       color: isActiveRound
-          ? theme.colorScheme.primary.withOpacity(0.5)
-          : Colors.white.withOpacity(0.06),
-      width: isActiveRound ? 1.5 : 1.0,
+          ? theme.colorScheme.primary.withAlpha((255 * 0.8).toInt())
+          : Colors.white.withAlpha((255 * 0.08).toInt()),
+      width: isActiveRound ? 1.8 : 1.0,
     );
 
     final glowShadow = isActiveRound
         ? [
             BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.1),
-              blurRadius: 8,
-              spreadRadius: 1,
+              color: theme.colorScheme.primary.withAlpha((255 * 0.15).toInt()),
+              blurRadius: 10,
+              spreadRadius: 2,
             )
           ]
         : null;
@@ -281,7 +398,14 @@ class KnockoutBracketView extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: isPlayable ? () => onMatchTap(actualMatch) : null,
+        onTap: isPlayable
+            ? () {
+                // Tapping any leg match in the matchup list triggers detail screen
+                // In bracket view, we trigger the first leg or the currently active leg match
+                final activeMatch = matchupMatches.firstWhere((m) => !m.isCompleted, orElse: () => matchupMatches.first);
+                onMatchTap(activeMatch);
+              }
+            : null,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           decoration: BoxDecoration(
@@ -296,24 +420,34 @@ class KnockoutBracketView extends StatelessWidget {
                 child: _buildTeamRow(
                   theme: theme,
                   resolvedTeam: team1,
-                  score: score1,
+                  leg1Score: t1Leg1,
+                  leg2Score: t1Leg2,
+                  aggScore: t1Agg,
+                  pens: t1Pens,
                   isWinner: isT1Winner,
                   isLoser: isCompleted && !isT1Winner,
+                  showLegs: matchupMatches.length > 1,
+                  isCompleted: isCompleted,
                 ),
               ),
               // Divider
               Container(
                 height: 1,
-                color: Colors.white.withOpacity(0.04),
+                color: Colors.white.withAlpha((255 * 0.05).toInt()),
               ),
               // Team 2 Row
               Expanded(
                 child: _buildTeamRow(
                   theme: theme,
                   resolvedTeam: team2,
-                  score: score2,
+                  leg1Score: t2Leg1,
+                  leg2Score: t2Leg2,
+                  aggScore: t2Agg,
+                  pens: t2Pens,
                   isWinner: isT2Winner,
                   isLoser: isCompleted && !isT2Winner,
+                  showLegs: matchupMatches.length > 1,
+                  isCompleted: isCompleted,
                 ),
               ),
             ],
@@ -326,9 +460,14 @@ class KnockoutBracketView extends StatelessWidget {
   Widget _buildTeamRow({
     required ThemeData theme,
     required _ResolvedTeam resolvedTeam,
-    required String score,
+    required int? leg1Score,
+    required int? leg2Score,
+    required int? aggScore,
+    required int? pens,
     required bool isWinner,
     required bool isLoser,
+    required bool showLegs,
+    required bool isCompleted,
   }) {
     return Opacity(
       opacity: isLoser ? 0.45 : 1.0,
@@ -342,7 +481,7 @@ class KnockoutBracketView extends StatelessWidget {
                 width: 22,
                 height: 22,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
+                  color: Colors.white.withAlpha((255 * 0.04).toInt()),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -379,16 +518,54 @@ class KnockoutBracketView extends StatelessWidget {
             ),
             const SizedBox(width: 4),
 
-            // Score
-            if (score.isNotEmpty)
-              Text(
-                score,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  color: isWinner ? theme.colorScheme.primary : Colors.white,
+            // Legs and Agg score details
+            if (isCompleted || aggScore != null) ...[
+              if (showLegs) ...[
+                if (leg1Score != null)
+                  Container(
+                    width: 20,
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$leg1Score',
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                if (leg2Score != null)
+                  Container(
+                    width: 20,
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$leg2Score',
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+              ],
+              
+              // Aggregate / Main Score
+              if (aggScore != null)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$aggScore',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: isWinner ? theme.colorScheme.primary : Colors.white,
+                      ),
+                    ),
+                    if (pens != null)
+                      Text(
+                        ' ($pens)',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: isWinner ? theme.colorScheme.primary : Colors.orangeAccent,
+                        ),
+                      ),
+                  ],
                 ),
-              ),
+            ],
           ],
         ),
       ),
@@ -431,8 +608,8 @@ class _BracketLinesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = lineColor.withOpacity(0.18)
-      ..strokeWidth = 1.5
+      ..color = lineColor.withAlpha((255 * 0.2).toInt())
+      ..strokeWidth = 1.8
       ..style = PaintingStyle.stroke;
 
     final stepOffset = 18.0;

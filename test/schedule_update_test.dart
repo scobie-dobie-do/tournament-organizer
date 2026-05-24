@@ -36,6 +36,10 @@ void main() {
     await tester.tap(find.byIcon(Icons.add).first);
     await tester.pump();
 
+    // Scroll down to make Save Result button visible
+    await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+
     // Tap save result
     await tester.tap(find.text('Save Result'));
     await tester.pumpAndSettle();

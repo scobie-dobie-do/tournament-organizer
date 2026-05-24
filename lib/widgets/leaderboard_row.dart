@@ -103,13 +103,13 @@ class _LeaderboardRowState extends State<LeaderboardRow> with SingleTickerProvid
             : theme.colorScheme.surfaceContainerLow.withAlpha((255 * 0.35).toInt()),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.colorScheme.primary.withOpacity(widget.rank == 1 ? 0.45 : 0.25),
+          color: theme.colorScheme.primary.withAlpha((255 * (widget.rank == 1 ? 0.45 : 0.25)).toInt()),
           width: 1.2,
         ),
         boxShadow: widget.rank == 1
             ? [
                 BoxShadow(
-                  color: theme.colorScheme.primary.withOpacity(0.12),
+                  color: theme.colorScheme.primary.withAlpha((255 * 0.12).toInt()),
                   blurRadius: 8,
                   spreadRadius: 1,
                 )

@@ -12,16 +12,32 @@ class CreateTournamentScreen extends StatefulWidget {
   State<CreateTournamentScreen> createState() => _CreateTournamentScreenState();
 }
 
+enum MatchLegOption {
+  singleLeg(1, 'Single Leg'),
+  twoLegs(2, 'Two Legs (Home & Away)'),
+  triple(3, 'Triple Round Robin'),
+  custom(-1, 'Custom Repetition');
+
+  final int value;
+  final String label;
+  const MatchLegOption(this.value, this.label);
+}
+
 class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
   final List<Player> _teams = [];
   final TextEditingController _tournamentNameController = TextEditingController();
   final TextEditingController _teamNameController = TextEditingController();
   final TextEditingController _playerNameController = TextEditingController();
+  final TextEditingController _customLegsController = TextEditingController(text: '1');
   String? _selectedLogoPath;
   
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _teamFormKey = GlobalKey<FormState>();
   TournamentFormat _selectedFormat = TournamentFormat.knockout;
+  MatchLegOption _selectedLegOption = MatchLegOption.singleLeg;
+  int _legs = 1;
+  bool _awayGoalsRule = false;
+  bool _hasThirdPlaceMatch = false;
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _importLogo() async {
@@ -33,7 +49,8 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         });
       }
     } catch (e) {
-      print('Error picking image: $e');
+      debugPrint('Error picking image: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to import logo: $e'),
@@ -49,6 +66,7 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
     _tournamentNameController.dispose();
     _teamNameController.dispose();
     _playerNameController.dispose();
+    _customLegsController.dispose();
     super.dispose();
   }
 
@@ -179,6 +197,17 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       return;
     }
 
+    int finalLegs = _legs;
+    if (_selectedLegOption == MatchLegOption.custom) {
+      final text = _customLegsController.text.trim();
+      final parsed = int.tryParse(text);
+      if (parsed == null || parsed < 1 || parsed > 10) {
+        _showError("Please enter a valid repetition count between 1 and 10.");
+        return;
+      }
+      finalLegs = parsed;
+    }
+
     if (_selectedFormat == TournamentFormat.knockout) {
       if (_teams.length < 4) {
         _showError("Knockout requires at least 4 teams");
@@ -204,6 +233,9 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       name: tournamentName,
       players: List.from(_teams),
       format: _selectedFormat,
+      legs: finalLegs,
+      awayGoalsRule: _selectedFormat == TournamentFormat.knockout && finalLegs > 1 ? _awayGoalsRule : false,
+      hasThirdPlaceMatch: _selectedFormat == TournamentFormat.knockout ? _hasThirdPlaceMatch : false,
     );
 
     // Navigate to Match Screen and clear previous stack so back goes to Home Screen
@@ -229,6 +261,56 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
         transitionDuration: const Duration(milliseconds: 450),
       ),
       (route) => route.isFirst,
+    );
+  }
+
+  Widget _buildMatchPreviewText(ThemeData theme) {
+    final count = _teams.length;
+    String text = '';
+    
+    int finalLegs = _legs;
+    if (_selectedLegOption == MatchLegOption.custom) {
+      finalLegs = int.tryParse(_customLegsController.text) ?? 1;
+    }
+
+    if (_selectedFormat == TournamentFormat.roundRobin) {
+      if (count >= 2) {
+        final matchesPerTeam = finalLegs * (count - 1);
+        final total = finalLegs * count * (count - 1) ~/ 2;
+        text = 'Each team plays $matchesPerTeam matches. Total tournament matches: $total';
+      } else {
+        text = 'Register teams to preview tournament schedule.';
+      }
+    } else {
+      if (count >= 4 && count.isEven) {
+        final total = finalLegs * (count - 1) + (_hasThirdPlaceMatch ? finalLegs : 0);
+        text = 'Knockout plays over $finalLegs leg(s). Total tournament matches: $total';
+      } else if (count.isOdd) {
+        text = 'Register an even number of teams for Knockout.';
+      } else {
+        text = 'Register at least 4 teams for Knockout.';
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange.withAlpha((255 * 0.08).toInt()),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.withAlpha((255 * 0.2).toInt()), width: 1),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: Colors.orange, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12, color: Colors.orangeAccent, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -311,10 +393,121 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                               if (val != null) {
                                 setState(() {
                                   _selectedFormat = val;
+                                  if (_selectedFormat == TournamentFormat.knockout && _selectedLegOption == MatchLegOption.triple) {
+                                    _selectedLegOption = MatchLegOption.singleLeg;
+                                    _legs = 1;
+                                  }
                                 });
                               }
                             },
                           ),
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<MatchLegOption>(
+                            initialValue: _selectedLegOption,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: 'Match Format',
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              filled: true,
+                              fillColor: theme.scaffoldBackgroundColor,
+                            ),
+                            items: [
+                              MatchLegOption.singleLeg,
+                              MatchLegOption.twoLegs,
+                              if (_selectedFormat == TournamentFormat.roundRobin) MatchLegOption.triple,
+                              MatchLegOption.custom,
+                            ].map((option) {
+                              return DropdownMenuItem<MatchLegOption>(
+                                value: option,
+                                child: Text(option.label),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedLegOption = val;
+                                  if (val == MatchLegOption.singleLeg) {
+                                    _legs = 1;
+                                  } else if (val == MatchLegOption.twoLegs) {
+                                    _legs = 2;
+                                  } else if (val == MatchLegOption.triple) {
+                                    _legs = 3;
+                                  } else {
+                                    final parsed = int.tryParse(_customLegsController.text) ?? 1;
+                                    _legs = parsed;
+                                  }
+                                });
+                              }
+                            },
+                          ),
+                          
+                          if (_selectedLegOption == MatchLegOption.custom) ...[
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _customLegsController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                              decoration: const InputDecoration(
+                                labelText: 'Repetitions / Legs (1-10)',
+                                prefixIcon: Icon(Icons.repeat),
+                                hintText: 'e.g. 4',
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Leg count is required';
+                                }
+                                final val = int.tryParse(value);
+                                if (val == null || val < 1 || val > 10) {
+                                  return 'Enter a number between 1 and 10';
+                                }
+                                return null;
+                              },
+                              onChanged: (value) {
+                                final val = int.tryParse(value);
+                                if (val != null && val >= 1 && val <= 10) {
+                                  setState(() {
+                                    _legs = val;
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+
+                          if (_selectedFormat == TournamentFormat.knockout) ...[
+                            const SizedBox(height: 8),
+                            SwitchListTile(
+                              title: const Text('Third Place Match', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                              subtitle: Text('Play-off between losing semi-finalists', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                              value: _hasThirdPlaceMatch,
+                              activeThumbColor: Colors.orange,
+                              contentPadding: EdgeInsets.zero,
+                              onChanged: (val) {
+                                setState(() {
+                                  _hasThirdPlaceMatch = val;
+                                });
+                              },
+                            ),
+                            if (_legs > 1) ...[
+                              SwitchListTile(
+                                title: const Text('Away Goals Rule', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                                subtitle: Text('Away goals count double in case of a draw', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                                value: _awayGoalsRule,
+                                activeThumbColor: Colors.orange,
+                                contentPadding: EdgeInsets.zero,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _awayGoalsRule = val;
+                                  });
+                                },
+                              ),
+                            ],
+                          ],
+                          const SizedBox(height: 12),
+                          _buildMatchPreviewText(theme),
                         ],
                       ),
                     ),
@@ -471,39 +664,33 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
                         color: Colors.white,
                       ),
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.bolt, size: 14),
-                          label: const Text('Add 4 Presets', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
-                          onPressed: () => _quickAddTeams(4),
-                          style: ElevatedButton.styleFrom(
-                            elevation: 0,
-                            backgroundColor: theme.colorScheme.primary.withAlpha((255 * 0.1).toInt()),
-                            foregroundColor: theme.colorScheme.primary,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.bolt, size: 14),
+                      label: const Text('Add 4 Presets', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                      onPressed: () => _quickAddTeams(4),
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: theme.colorScheme.primary.withAlpha((255 * 0.1).toInt()),
+                        foregroundColor: theme.colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.bolt, size: 14),
-                          label: const Text('Add 8 Presets', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
-                          onPressed: () => _quickAddTeams(8),
-                          style: ElevatedButton.styleFrom(
-                            elevation: 0,
-                            backgroundColor: theme.colorScheme.primary.withAlpha((255 * 0.1).toInt()),
-                            foregroundColor: theme.colorScheme.primary,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.bolt, size: 14),
+                      label: const Text('Add 8 Presets', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                      onPressed: () => _quickAddTeams(8),
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: theme.colorScheme.primary.withAlpha((255 * 0.1).toInt()),
+                        foregroundColor: theme.colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),

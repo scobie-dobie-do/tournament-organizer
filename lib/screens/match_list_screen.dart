@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import '../models/match.dart';
 import '../models/player.dart';
 import '../logic/tournament_logic.dart';
+import '../logic/knockout_engine.dart';
 import 'standings_screen.dart';
 import 'match_detail_screen.dart';
 import '../widgets/match_card.dart';
 import '../widgets/knockout_bracket_view.dart';
+import '../services/export_service.dart';
+import '../storage/database_service.dart';
 
-/// Match List Screen — preview-only list of matches for a tournament.
-/// Tapping a match navigates to [MatchDetailScreen] for score editing.
+/// Match List Screen — lists matches grouped by Leg or displayed in a tree bracket.
+/// Settings button triggers lock options, reset dialogues, and PDF exports.
 class MatchListScreen extends StatefulWidget {
   final TournamentState tournamentState;
 
@@ -44,8 +47,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
         const begin = Offset(1.0, 0.0);
         const end = Offset.zero;
         const curve = Curves.easeOutQuart;
-        final tween =
-            Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
         return SlideTransition(
           position: anim.drive(tween),
           child: FadeTransition(opacity: anim, child: child),
@@ -62,8 +64,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
         const begin = Offset(0.0, 0.08);
         const end = Offset.zero;
         const curve = Curves.easeOutQuart;
-        final tween =
-            Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
         return SlideTransition(
           position: anim.drive(tween),
           child: FadeTransition(opacity: anim, child: child),
@@ -88,14 +89,11 @@ class _MatchListScreenState extends State<MatchListScreen> {
         ),
       ),
     ).then((_) {
-      // Always force a full rebuild when returning from detail.
-      // state.matches is already updated (mutated in-place) by MatchDetailScreen.
       if (mounted) {
         setState(() {});
       }
     });
   }
-
 
   void _advanceRound() {
     setState(() {
@@ -104,13 +102,153 @@ class _MatchListScreenState extends State<MatchListScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-            'Round ${widget.tournamentState.currentRoundIndex} Generated!'),
+        content: Text('Round ${widget.tournamentState.currentRoundIndex} Generated!'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  void _showAdminSettings(BuildContext context, TournamentState state) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.colorScheme.surfaceContainerLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'ADMIN CONTROLS',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: theme.colorScheme.primary,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Lock Toggle Switch
+                    SwitchListTile(
+                      title: const Text('Lock Tournament', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Prevents accidental changes to match results', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      value: state.locked,
+                      activeThumbColor: Colors.orange,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (val) {
+                        setState(() {
+                          state.locked = val;
+                        });
+                        setSheetState(() {});
+                        DatabaseService().saveTournament(state);
+                      },
+                    ),
+                    const Divider(color: Colors.white12, height: 8),
+
+                    // Reset Tournament Button
+                    ListTile(
+                      leading: const Icon(Icons.refresh_rounded, color: Colors.redAccent),
+                      title: const Text('Reset Tournament', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Clears all recorded scores and restarts', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showResetConfirmation(context, state);
+                      },
+                    ),
+                    const Divider(color: Colors.white12, height: 8),
+
+                    // Export PDF Report
+                    ListTile(
+                      leading: Icon(Icons.picture_as_pdf_rounded, color: theme.colorScheme.primary),
+                      title: const Text('Export PDF Report', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Generates printable tournament PDF document', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        ExportService.printTournamentPdf(state);
+                      },
+                    ),
+                    
+                    // Share Text Summary
+                    ListTile(
+                      leading: Icon(Icons.share_rounded, color: theme.colorScheme.primary),
+                      title: const Text('Share Summary Text', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text('Copies text summary of standings to share', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        ExportService.shareStandingsText(state);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showResetConfirmation(BuildContext context, TournamentState state) {
+    final theme = Theme.of(context);
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Reset Tournament?',
+          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
+        ),
+        content: Text(
+          'This action is permanent and will completely reset all scores, standings, and history logs.',
+          style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade400)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Reset Now', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true && mounted) {
+        if (!context.mounted) return;
+        setState(() {
+          state.resetTournament();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Tournament has been reset.'),
+            backgroundColor: theme.colorScheme.primary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
   }
 
   // ─── Filtering ────────────────────────────────────────────────────────────
@@ -130,12 +268,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
     final state = widget.tournamentState;
     if (!state.isCompleted) return null;
     if (state.format == TournamentFormat.knockout) {
-      final finals = state.matches
-          .where((m) => m.roundIndex == state.currentRoundIndex)
-          .toList();
-      if (finals.isNotEmpty && finals.first.winner != null) {
-        return finals.first.winner;
-      }
+      return KnockoutEngine.getChampion(state.matches, state.currentRoundIndex, state.awayGoalsRule);
     } else {
       final lb = state.getLeaderboard();
       if (lb.isNotEmpty) return lb.first.team;
@@ -153,10 +286,16 @@ class _MatchListScreenState extends State<MatchListScreen> {
 
     Widget content = Scaffold(
       appBar: AppBar(
-        title: Text(
-          state.format == TournamentFormat.knockout
-              ? 'Knockout Bracket'
-              : 'League Matches',
+        title: Row(
+          children: [
+            Text(
+              state.format == TournamentFormat.knockout ? 'Knockout Bracket' : 'League Matches',
+            ),
+            if (state.locked) ...[
+              const SizedBox(width: 8),
+              const Icon(Icons.lock_rounded, color: Colors.orange, size: 16),
+            ]
+          ],
         ),
         actions: [
           if (state.format == TournamentFormat.knockout)
@@ -181,6 +320,11 @@ class _MatchListScreenState extends State<MatchListScreen> {
               });
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.settings_rounded),
+            tooltip: 'Settings & Admin',
+            onPressed: () => _showAdminSettings(context, state),
+          ),
           const SizedBox(width: 4),
         ],
         bottom: (state.format == TournamentFormat.knockout && !_isBracketView)
@@ -189,10 +333,8 @@ class _MatchListScreenState extends State<MatchListScreen> {
                 indicatorColor: theme.colorScheme.primary,
                 labelColor: theme.colorScheme.primary,
                 unselectedLabelColor: Colors.grey.shade500,
-                labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w900, fontSize: 13),
-                unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13),
+                labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 tabs: List.generate(
                   state.currentRoundIndex,
                   (i) => Tab(text: 'Round ${i + 1}'),
@@ -207,8 +349,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
             if (champion != null) _buildChampionBanner(champion, state, theme),
 
             // ── Round Robin filter bar ────────────────────────────────
-            if (state.format == TournamentFormat.roundRobin)
-              _buildFilterBar(theme),
+            if (state.format == TournamentFormat.roundRobin) _buildFilterBar(theme),
 
             // ── Match list ───────────────────────────────────────────
             Expanded(
@@ -236,8 +377,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
             ),
 
             // ── Advance Round button (Knockout only) ──────────────────
-            if (state.format == TournamentFormat.knockout &&
-                state.canAdvanceKnockout)
+            if (state.format == TournamentFormat.knockout && state.canAdvanceKnockout)
               _buildAdvanceButton(theme),
           ],
         ),
@@ -258,8 +398,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
 
   // ─── Section builders ─────────────────────────────────────────────────────
 
-  Widget _buildChampionBanner(
-      Player champion, TournamentState state, ThemeData theme) {
+  Widget _buildChampionBanner(Player champion, TournamentState state, ThemeData theme) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -310,9 +449,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  champion.name.isNotEmpty
-                      ? '${champion.teamName} · ${champion.name}'
-                      : champion.teamName,
+                  champion.name.isNotEmpty ? '${champion.teamName} · ${champion.name}' : champion.teamName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -336,13 +473,11 @@ class _MatchListScreenState extends State<MatchListScreen> {
               backgroundColor: Colors.white,
               foregroundColor: theme.colorScheme.primary,
               elevation: 0,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
-              textStyle: const TextStyle(
-                  fontWeight: FontWeight.w900, fontSize: 12),
+              textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
             ),
             child: const Text('Standings'),
           ),
@@ -359,8 +494,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
           backgroundColor: theme.cardTheme.color,
           selectedBackgroundColor: theme.colorScheme.primary,
           selectedForegroundColor: theme.colorScheme.surface,
-          textStyle:
-              const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
         ),
         segments: const [
           ButtonSegment<String>(
@@ -391,8 +525,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.sports_soccer_rounded,
-                size: 56, color: Colors.grey.shade700),
+            Icon(Icons.sports_soccer_rounded, size: 56, color: Colors.grey.shade700),
             const SizedBox(height: 14),
             Text(
               'No matches here',
@@ -407,21 +540,53 @@ class _MatchListScreenState extends State<MatchListScreen> {
       );
     }
 
+    // Group matches by legNumber
+    final Map<int, List<TournamentMatch>> groupedByLeg = {};
+    for (var m in matches) {
+      groupedByLeg.putIfAbsent(m.legNumber, () => []).add(m);
+    }
+
+    final sortedLegs = groupedByLeg.keys.toList()..sort();
+
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-      itemCount: matches.length,
-      itemBuilder: (context, index) {
-        final match = matches[index];
-        final isRoundActive =
-            widget.tournamentState.format == TournamentFormat.roundRobin ||
-                match.roundIndex == widget.tournamentState.currentRoundIndex;
+      itemCount: sortedLegs.length,
+      itemBuilder: (context, legIdx) {
+        final legNumber = sortedLegs[legIdx];
+        final legMatches = groupedByLeg[legNumber]!;
 
-        return MatchCard(
-          match: match,
-          index: index,
-          isRoundActive: isRoundActive,
-          onTap: () => _openMatchDetail(match),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (groupedByLeg.length > 1) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 10.0, bottom: 8.0, left: 4.0),
+                child: Text(
+                  'LEG $legNumber',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: theme.colorScheme.primary,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+            ],
+            ...List.generate(legMatches.length, (matchIndex) {
+              final match = legMatches[matchIndex];
+              final isRoundActive = widget.tournamentState.format == TournamentFormat.roundRobin ||
+                  match.roundIndex == widget.tournamentState.currentRoundIndex;
+
+              return MatchCard(
+                match: match,
+                index: matchIndex,
+                isRoundActive: isRoundActive,
+                onTap: () => _openMatchDetail(match),
+              );
+            }),
+            const SizedBox(height: 10),
+          ],
         );
       },
     );
@@ -450,8 +615,7 @@ class _MatchListScreenState extends State<MatchListScreen> {
           backgroundColor: theme.colorScheme.primary,
           foregroundColor: theme.colorScheme.surface,
           elevation: 3,
-          shadowColor:
-              theme.colorScheme.primary.withAlpha((255 * 0.25).toInt()),
+          shadowColor: theme.colorScheme.primary.withAlpha((255 * 0.25).toInt()),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),

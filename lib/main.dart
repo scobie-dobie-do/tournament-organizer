@@ -16,10 +16,10 @@ class TournamentOrganizerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const deepDarkBackground = Color(0xFF0A1210); // Deep Emerald Grey Background
-    const greenAccent = Color(0xFF00CC66); // Viridian Accent Green
-    const mintHighlight = Color(0xFFCCFFDD); // Mint highlight
-    const darkGrayCard = Color(0xFF121E1B); // Green-tinted dark gray card
+    const deepDarkBackground = Color(0xFF0B0C10); // Deep Obsidian Background
+    const orangeAccent = Color(0xFFFF8C00); // Deep premium orange accent
+    const brightOrange = Color(0xFFFFA500); // Secondary bright orange
+    const darkGrayCard = Color(0xFF1F2833); // Slate metallic card color
 
     return MaterialApp(
       title: 'Tournament Organizer',
@@ -31,13 +31,13 @@ class TournamentOrganizerApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: greenAccent,
+          seedColor: orangeAccent,
           brightness: Brightness.dark,
-          primary: greenAccent,
-          secondary: mintHighlight,
+          primary: orangeAccent,
+          secondary: brightOrange,
           surface: deepDarkBackground,
           surfaceContainerLow: darkGrayCard,
-          surfaceContainerHighest: const Color(0xFF1B2F2A),
+          surfaceContainerHighest: const Color(0xFF2E3A4D),
         ),
         scaffoldBackgroundColor: deepDarkBackground,
         appBarTheme: const AppBarTheme(
@@ -51,7 +51,7 @@ class TournamentOrganizerApp extends StatelessWidget {
             fontWeight: FontWeight.w900,
             letterSpacing: 0.5,
           ),
-          iconTheme: IconThemeData(color: greenAccent),
+          iconTheme: IconThemeData(color: orangeAccent),
         ),
         cardTheme: CardThemeData(
           color: darkGrayCard,
@@ -81,7 +81,7 @@ class TournamentOrganizerApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: greenAccent, width: 2.0),
+            borderSide: const BorderSide(color: orangeAccent, width: 2.0),
           ),
           labelStyle: TextStyle(
             color: Colors.grey.shade400,
@@ -91,7 +91,7 @@ class TournamentOrganizerApp extends StatelessWidget {
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: greenAccent,
+            backgroundColor: orangeAccent,
             foregroundColor: deepDarkBackground,
             shadowColor: Colors.black.withAlpha((255 * 0.2).toInt()),
             elevation: 2,
@@ -111,7 +111,7 @@ class TournamentOrganizerApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.light,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: greenAccent,
+          seedColor: orangeAccent,
           brightness: Brightness.light,
         ),
       ),
